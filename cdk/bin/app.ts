@@ -1,38 +1,38 @@
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
-import { AgentCoreInfraStack } from './agentcore-infra-stack';
-import { AgentCoreStack } from './agentcore-stack';
-import { FrontendStack } from './lib/frontend-stack';
+import { AgentCoreInfraStack } from '../lib/infra-stack';
+import { AgentCoreStack } from '../lib/runtime-stack';
+import { FrontendStack } from '../lib/frontend-stack';
 
 const app = new cdk.App();
 
 // Infrastructure stack (ECR, IAM, CodeBuild, S3)
-new AgentCoreInfraStack(app, 'StrandsClaudeAgentInfra', {
+new AgentCoreInfraStack(app, 'AgentCoreInfra', {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION || 'us-east-1',
   },
-  description: 'Infrastructure for Strands Claude Agent (ECR + IAM + CodeBuild)',
+  description: 'AgentCore Infrastructure: Container registry, build pipeline, and IAM roles',
 });
 
 // Runtime stack (depends on infra stack)
-const agentStack = new AgentCoreStack(app, 'StrandsClaudeAgentStack', {
+const agentStack = new AgentCoreStack(app, 'AgentCoreRuntime', {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION || 'us-east-1',
   },
-  description: 'Strands Claude Agent deployed on Bedrock AgentCore',
+  description: 'AgentCore Runtime: Container-based agent with API Gateway integration',
 });
 
 // Frontend stack (depends on runtime stack)
-new FrontendStack(app, 'AgentCoreFrontendStack', {
+new FrontendStack(app, 'AgentCoreFrontend', {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION || 'us-east-1',
   },
   apiUrl: agentStack.apiUrl,
-  description: 'React Frontend for AgentCore Demo',
+  description: 'AgentCore Frontend: CloudFront-hosted React interface',
 });
 
 app.synth();

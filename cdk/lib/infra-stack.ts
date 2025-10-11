@@ -25,7 +25,7 @@ export class AgentCoreInfraStack extends cdk.Stack {
     // Create IAM role for the agent runtime
     const agentRole = new iam.Role(this, 'AgentRuntimeRole', {
       assumedBy: new iam.ServicePrincipal('bedrock-agentcore.amazonaws.com'),
-      description: 'Role for Bedrock AgentCore Runtime',
+      description: 'Execution role for AgentCore runtime',
     });
 
     // ECR Image Access
@@ -139,7 +139,7 @@ export class AgentCoreInfraStack extends cdk.Stack {
     // Create IAM role for CodeBuild
     const codeBuildRole = new iam.Role(this, 'CodeBuildRole', {
       assumedBy: new iam.ServicePrincipal('codebuild.amazonaws.com'),
-      description: 'Role for CodeBuild to build agent container',
+      description: 'Build role for container image pipeline',
     });
 
     // Grant CodeBuild permissions - ECR Token Access
@@ -197,7 +197,7 @@ export class AgentCoreInfraStack extends cdk.Stack {
     // Create CodeBuild project for building ARM64 container
     const buildProject = new codebuild.Project(this, 'AgentBuildProject', {
       projectName: 'bedrock-agentcore-strands-agent-builder',
-      description: 'Builds ARM64 Docker image for Strands agent',
+      description: 'Builds ARM64 container image for AgentCore runtime',
       role: codeBuildRole,
       environment: {
         buildImage: codebuild.LinuxBuildImage.AMAZON_LINUX_2_ARM_3,
@@ -206,7 +206,7 @@ export class AgentCoreInfraStack extends cdk.Stack {
       },
       source: codebuild.Source.s3({
         bucket: sourceBucket,
-        path: 'source.zip',
+        path: 'agent-source/',  // Path to extracted agent files
       }),
       buildSpec: codebuild.BuildSpec.fromObject({
         version: '0.2',
@@ -250,23 +250,21 @@ export class AgentCoreInfraStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'SourceBucketName', {
       value: sourceBucket.bucketName,
       description: 'S3 bucket for CodeBuild source',
+      exportName: 'AgentCoreSourceBucketName',
     });
 
     new cdk.CfnOutput(this, 'BuildProjectName', {
       value: buildProject.projectName,
       description: 'CodeBuild project name',
+      exportName: 'AgentCoreBuildProjectName',
+    });
+
+    new cdk.CfnOutput(this, 'BuildProjectArn', {
+      value: buildProject.projectArn,
+      description: 'CodeBuild project ARN',
+      exportName: 'AgentCoreBuildProjectArn',
     });
   }
 }
 
-const app = new cdk.App();
 
-new AgentCoreInfraStack(app, 'StrandsClaudeAgentInfra', {
-  env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: process.env.CDK_DEFAULT_REGION || 'us-east-1',
-  },
-  description: 'Infrastructure for Strands Claude Agent (ECR + IAM)',
-});
-
-app.synth();

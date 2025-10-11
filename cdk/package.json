@@ -1,7 +1,7 @@
 {
   "name": "strands-agentcore-cdk",
   "version": "1.0.0",
-  "description": "CDK deployment for Strands Claude agent on Bedrock AgentCore",
+  "description": "CDK deployment for Strands Agent on Bedrock AgentCore",
   "main": "app.ts",
   "scripts": {
     "build": "tsc",

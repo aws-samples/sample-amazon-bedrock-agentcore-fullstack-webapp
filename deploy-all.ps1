@@ -11,43 +11,50 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Step 2: Install frontend dependencies
-Write-Host "`n[2/5] Installing frontend dependencies..." -ForegroundColor Yellow
-# Remove existing node_modules to ensure fresh install with latest dependencies
-if (Test-Path "frontend/node_modules") {
-    Write-Host "Removing existing node_modules..." -ForegroundColor Gray
-    Remove-Item -Recurse -Force "frontend/node_modules"
+# Step 2: Install CDK dependencies
+Write-Host "`n[2/6] Installing CDK dependencies..." -ForegroundColor Yellow
+if (-not (Test-Path "cdk/node_modules")) {
+    Push-Location cdk
+    npm install
+    Pop-Location
 }
-npm install --prefix frontend
 
-# Step 3: Deploy infrastructure stack
-Write-Host "`n[3/7] Deploying infrastructure stack..." -ForegroundColor Yellow
-npx cdk deploy StrandsClaudeAgentInfra --no-cli-pager --require-approval never
+# Step 3: Install frontend dependencies
+Write-Host "`n[3/6] Installing frontend dependencies..." -ForegroundColor Yellow
+Push-Location frontend
+# Commented out to save time during development - uncomment for clean builds
+# if (Test-Path "node_modules") {
+#     Write-Host "Removing existing node_modules..." -ForegroundColor Gray
+#     Remove-Item -Recurse -Force "node_modules"
+# }
+npm install
+Pop-Location
+
+# Step 4: Deploy infrastructure stack
+Write-Host "`n[4/6] Deploying infrastructure stack..." -ForegroundColor Yellow
+Push-Location cdk
+npx cdk deploy AgentCoreInfra --no-cli-pager --require-approval never
+Pop-Location
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Infrastructure deployment failed" -ForegroundColor Red
     exit 1
 }
 
-# Step 4: Create placeholder dist for initial deployment
-Write-Host "`n[4/7] Creating placeholder frontend build..." -ForegroundColor Yellow
+# Step 5: Create placeholder dist for initial deployment
+Write-Host "`n[5/6] Creating placeholder frontend build..." -ForegroundColor Yellow
 if (-not (Test-Path "frontend/dist")) {
     New-Item -ItemType Directory -Path "frontend/dist" -Force | Out-Null
     echo "<!DOCTYPE html><html><body><h1>Building...</h1></body></html>" > frontend/dist/index.html
 }
 
-# Step 5: Build agent Docker image
-Write-Host "`n[5/7] Building agent Docker image..." -ForegroundColor Yellow
-& .\scripts\build-agent-image.ps1
-
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "Agent image build failed" -ForegroundColor Red
-    exit 1
-}
-
-# Step 6: Deploy backend stack
-Write-Host "`n[6/7] Deploying AgentCore backend stack..." -ForegroundColor Yellow
-npx cdk deploy StrandsClaudeAgentStack --no-cli-pager --require-approval never
+# Step 6: Deploy backend stack (triggers build and waits via Lambda)
+Write-Host "`n[6/6] Deploying AgentCore backend stack..." -ForegroundColor Yellow
+Write-Host "Note: CodeBuild will run and Lambda will wait for completion (5-10 minutes)" -ForegroundColor Gray
+Write-Host "The stack deployment will pause while the Docker image builds..." -ForegroundColor Gray
+Push-Location cdk
+npx cdk deploy AgentCoreRuntime --no-cli-pager --require-approval never
+Pop-Location
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Backend deployment failed" -ForegroundColor Red
@@ -56,7 +63,7 @@ if ($LASTEXITCODE -ne 0) {
 
 # Step 7: Get API URL and build/deploy frontend
 Write-Host "`n[7/7] Building and deploying frontend..." -ForegroundColor Yellow
-$apiUrl = aws cloudformation describe-stacks --stack-name StrandsClaudeAgentStack --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text --no-cli-pager
+$apiUrl = aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text --no-cli-pager
 
 if ([string]::IsNullOrEmpty($apiUrl)) {
     Write-Host "Failed to get API URL from stack outputs" -ForegroundColor Red
@@ -74,7 +81,9 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # Deploy frontend stack
-npx cdk deploy AgentCoreFrontendStack --no-cli-pager --require-approval never
+Push-Location cdk
+npx cdk deploy AgentCoreFrontend --no-cli-pager --require-approval never
+Pop-Location
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Frontend deployment failed" -ForegroundColor Red
@@ -82,7 +91,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # Get CloudFront URL
-$websiteUrl = aws cloudformation describe-stacks --stack-name AgentCoreFrontendStack --query "Stacks[0].Outputs[?OutputKey=='WebsiteUrl'].OutputValue" --output text --no-cli-pager
+$websiteUrl = aws cloudformation describe-stacks --stack-name AgentCoreFrontend --query "Stacks[0].Outputs[?OutputKey=='WebsiteUrl'].OutputValue" --output text --no-cli-pager
 
 Write-Host "`n=== Deployment Complete ===" -ForegroundColor Green
 Write-Host "Website URL: $websiteUrl" -ForegroundColor Cyan

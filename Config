@@ -1,7 +1,6 @@
 package.BedrockAgentCoreScaffolding = {
     interfaces = (1.0);
 
-    # Use NoOpBuild. See https://w.amazon.com/index.php/BrazilBuildSystem/NoOpBuild
     build-system = no-op;
     build-tools = {
         1.0 = {
