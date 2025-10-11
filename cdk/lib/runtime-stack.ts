@@ -197,7 +197,7 @@ async function sendResponse(event, status, data, reason) {
     // Create the AgentCore Runtime
     const agentRuntime = new bedrockagentcore.CfnRuntime(this, 'AgentRuntime', {
       agentRuntimeName: 'strands_agent',
-      description: 'AgentCore runtime with Amazon Nova Micro model',
+      description: 'AgentCore runtime using Strands Agents framework',
       roleArn: agentRole.roleArn,
 
       // Container configuration
@@ -237,7 +237,7 @@ async function sendResponse(event, status, data, reason) {
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'index.handler',
       code: lambda.Code.fromAsset('../lambda/invoke-agent'),
-      timeout: cdk.Duration.seconds(30),
+      timeout: cdk.Duration.seconds(300), // 5 minutes for agent processing
       memorySize: 512,
       environment: {
         AGENT_RUNTIME_ARN: agentRuntime.attrAgentRuntimeArn,
@@ -265,6 +265,23 @@ async function sendResponse(event, status, data, reason) {
 
     const invokeResource = api.root.addResource('invoke');
     invokeResource.addMethod('POST', new apigateway.LambdaIntegration(invokeAgentLambda));
+
+    // Add CORS headers to gateway responses (for errors like 504)
+    api.addGatewayResponse('Default4xx', {
+      type: apigateway.ResponseType.DEFAULT_4XX,
+      responseHeaders: {
+        'Access-Control-Allow-Origin': "'*'",
+        'Access-Control-Allow-Headers': "'Content-Type,Authorization'",
+      },
+    });
+
+    api.addGatewayResponse('Default5xx', {
+      type: apigateway.ResponseType.DEFAULT_5XX,
+      responseHeaders: {
+        'Access-Control-Allow-Origin': "'*'",
+        'Access-Control-Allow-Headers': "'Content-Type,Authorization'",
+      },
+    });
 
 
 
