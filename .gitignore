@@ -1,0 +1,68 @@
+*.js
+!jest.config.js
+*.d.ts
+node_modules
+
+# CDK asset staging directory
+.cdk.staging
+cdk.out*
+
+# Frontend build output
+frontend/dist/
+frontend/build/
+
+# Environment files (keep templates, ignore actual credentials)
+.env.local
+.env.*.local
+!.env.example
+!.env.production
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Docker
+.dockerignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.kiro/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# AWS
+.aws-sam/
+samconfig.toml
+
+# Coverage reports
+coverage/
+.nyc_output/
+*.lcov

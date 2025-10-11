@@ -1,0 +1,117 @@
+default_agent: strands_claude_v3
+agents:
+  strands_claude_agent:
+    name: strands_claude_agent
+    entrypoint: strands_claude.py
+    platform: linux/arm64
+    container_runtime: docker
+    source_path: null
+    aws:
+      execution_role: arn:aws:iam::517675598740:role/StrandsClaudeAgentInfra-AgentRuntimeRole5365C2E6-s5nxfSW8bNFL
+      execution_role_auto_create: true
+      account: '517675598740'
+      region: us-east-1
+      ecr_repository: 517675598740.dkr.ecr.us-east-1.amazonaws.com/strands_claude_agent
+      ecr_auto_create: false
+      network_configuration:
+        network_mode: PUBLIC
+        network_mode_config: null
+      protocol_configuration:
+        server_protocol: HTTP
+      observability:
+        enabled: true
+    bedrock_agentcore:
+      agent_id: strands_claude_agent-Qgs4GP6xLN
+      agent_arn: arn:aws:bedrock-agentcore:us-east-1:517675598740:runtime/strands_claude_agent-Qgs4GP6xLN
+      agent_session_id: null
+    codebuild:
+      project_name: bedrock-agentcore-strands_claude_agent-builder
+      execution_role: arn:aws:iam::517675598740:role/AmazonBedrockAgentCoreSDKCodeBuild-us-east-1-67d71dc797
+      source_bucket: bedrock-agentcore-codebuild-sources-517675598740-us-east-1
+    memory:
+      mode: STM_ONLY
+      memory_id: strands_claude_agent_mem-wr1lGzHUrW
+      memory_arn: arn:aws:bedrock-agentcore:us-east-1:517675598740:memory/strands_claude_agent_mem-wr1lGzHUrW
+      memory_name: strands_claude_agent_mem
+      event_expiry_days: 30
+      first_invoke_memory_check_done: false
+    authorizer_configuration: null
+    request_header_configuration: null
+    oauth_configuration: null
+  strands_claude:
+    name: strands_claude
+    entrypoint: strands_claude.py
+    platform: linux/arm64
+    container_runtime: docker
+    source_path: null
+    aws:
+      execution_role: null
+      execution_role_auto_create: true
+      account: '517675598740'
+      region: us-east-1
+      ecr_repository: null
+      ecr_auto_create: true
+      network_configuration:
+        network_mode: PUBLIC
+        network_mode_config: null
+      protocol_configuration:
+        server_protocol: HTTP
+      observability:
+        enabled: true
+    bedrock_agentcore:
+      agent_id: null
+      agent_arn: null
+      agent_session_id: null
+    codebuild:
+      project_name: null
+      execution_role: null
+      source_bucket: null
+    memory:
+      mode: STM_ONLY
+      memory_id: null
+      memory_arn: null
+      memory_name: strands_claude_memory
+      event_expiry_days: 30
+      first_invoke_memory_check_done: false
+    authorizer_configuration: null
+    request_header_configuration: null
+    oauth_configuration: null
+  strands_claude_v3:
+    name: strands_claude_v3
+    entrypoint: strands_claude.py
+    platform: linux/arm64
+    container_runtime: docker
+    source_path: null
+    aws:
+      execution_role: arn:aws:iam::517675598740:role/AmazonBedrockAgentCoreSDKRuntime-us-east-1-facdf2d0e2
+      execution_role_auto_create: false
+      account: '517675598740'
+      region: us-east-1
+      ecr_repository: 517675598740.dkr.ecr.us-east-1.amazonaws.com/bedrock-agentcore-strands_claude_v3
+      ecr_auto_create: false
+      network_configuration:
+        network_mode: PUBLIC
+        network_mode_config: null
+      protocol_configuration:
+        server_protocol: HTTP
+      observability:
+        enabled: true
+    bedrock_agentcore:
+      agent_id: strands_claude_v3-SJJot62NYQ
+      agent_arn: arn:aws:bedrock-agentcore:us-east-1:517675598740:runtime/strands_claude_v3-SJJot62NYQ
+      agent_session_id: null
+    codebuild:
+      project_name: bedrock-agentcore-strands_claude_v3-builder
+      execution_role: arn:aws:iam::517675598740:role/AmazonBedrockAgentCoreSDKCodeBuild-us-east-1-facdf2d0e2
+      source_bucket: bedrock-agentcore-codebuild-sources-517675598740-us-east-1
+    memory:
+      mode: STM_ONLY
+      memory_id: strands_claude_v3_mem-PoJGxzF4Yc
+      memory_arn: arn:aws:bedrock-agentcore:us-east-1:517675598740:memory/strands_claude_v3_mem-PoJGxzF4Yc
+      memory_name: strands_claude_v3_mem
+      event_expiry_days: 30
+      first_invoke_memory_check_done: false
+    authorizer_configuration: null
+    request_header_configuration: null
+    oauth_configuration:
+      workload_name: workload-f0f62da6

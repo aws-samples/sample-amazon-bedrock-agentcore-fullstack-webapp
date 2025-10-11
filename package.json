@@ -1,0 +1,34 @@
+{
+  "name": "strands-agentcore-cdk",
+  "version": "1.0.0",
+  "description": "CDK deployment for Strands Claude agent on Bedrock AgentCore",
+  "main": "app.ts",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "cdk": "cdk"
+  },
+  "keywords": [
+    "aws",
+    "cdk",
+    "bedrock",
+    "agentcore",
+    "strands"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "aws-cdk": "^2.170.0",
+    "source-map-support": "^0.5.21",
+    "typescript": "^5.0.0",
+    "@cloudscape-design/chat-components": "^1.0.67",
+    "@cloudscape-design/components": "^3.0.1107",
+    "@cloudscape-design/design-tokens": "^3.0.0",
+    "@cloudscape-design/global-styles": "^1.0.0"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.170.0",
+    "constructs": "^10.0.0"
+  }
+}
