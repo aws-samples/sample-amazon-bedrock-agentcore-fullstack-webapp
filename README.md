@@ -23,9 +23,15 @@ Full-stack AWS Bedrock AgentCore demo application with automated deployment. Dep
 ### Test Your App
 
 1. Open the CloudFront URL from deployment output
-2. Enter a prompt: "What is 42 + 58?"
-3. Click "Invoke Agent"
-4. See the response from Claude 3.5 Sonnet!
+2. **Click "Sign In"** in the header
+3. **Create an account:**
+   - Click "Sign up"
+   - Enter your email and password (min 8 chars, needs uppercase, lowercase, digit)
+   - Check your email for verification code
+   - Enter the code to confirm
+4. You'll be automatically signed in
+5. Enter a prompt: "What is 42 + 58?"
+6. See the response from Claude 3.5 Sonnet!
 
 Try these prompts:
 - "What's the weather like today?"
@@ -48,11 +54,14 @@ Try these prompts:
 ┌─────────────────┐
 │   React App     │
 │   (S3 Bucket)   │
+│   + Auth UI     │
 └──────┬──────────┘
        │ POST /invoke
+       │ + JWT Token
        ▼
 ┌─────────────────┐
 │  API Gateway    │
+│  + Cognito Auth │
 └──────┬──────────┘
        │
        ▼
@@ -68,6 +77,12 @@ Try these prompts:
 │ (ARM64 Docker)  │
 │ Bedrock LLM     │
 └─────────────────┘
+
+┌─────────────────┐
+│ Cognito         │
+│ User Pool       │
+│ (Auth)          │
+└─────────────────┘
 ```
 
 ## Stack Architecture
@@ -75,8 +90,9 @@ Try these prompts:
 | Stack Name | Purpose | Key Resources |
 |------------|---------|---------------|
 | **AgentCoreInfra** | Build infrastructure | ECR Repository, CodeBuild Project, IAM Roles, S3 Bucket |
-| **AgentCoreRuntime** | Agent runtime & API | AgentCore Runtime, Lambda Waiter, Lambda Invoker, API Gateway |
-| **AgentCoreFrontend** | Web UI | S3 Bucket, CloudFront Distribution |
+| **AgentCoreAuth** | Authentication | Cognito User Pool, User Pool Client |
+| **AgentCoreRuntime** | Agent runtime & API | AgentCore Runtime, Lambda Waiter, Lambda Invoker, API Gateway + Cognito Authorizer |
+| **AgentCoreFrontend** | Web UI | S3 Bucket, CloudFront Distribution, React App with Auth |
 
 ## Project Structure
 
@@ -105,7 +121,9 @@ project-root/
 │
 ├── frontend/                   # React app (Vite)
 │   ├── src/
-│   │   ├── App.tsx            # Main UI component
+│   │   ├── App.tsx            # Main UI component with auth
+│   │   ├── AuthModal.tsx      # Login/signup modal
+│   │   ├── auth.ts            # Cognito authentication logic
 │   │   └── main.tsx           # React entry point
 │   ├── dist/                  # Build output (gitignored)
 │   └── package.json           # Frontend dependencies
@@ -125,58 +143,73 @@ The `deploy-all.ps1` script orchestrates the complete deployment:
 
 1. **Refresh AWS credentials** using isengardcli
 2. **Install CDK dependencies** (cdk/node_modules)
-3. **Install frontend dependencies** (frontend/node_modules)
+3. **Install frontend dependencies** (frontend/node_modules, includes amazon-cognito-identity-js)
 4. **Deploy AgentCoreInfra** - Creates build pipeline resources:
    - ECR repository for agent container images
    - IAM role for AgentCore runtime
    - S3 bucket for CodeBuild sources
    - CodeBuild project for ARM64 builds
-5. **Create placeholder frontend build** (for initial deployment)
-6. **Deploy AgentCoreRuntime** - Deploys agent and API:
+5. **Deploy AgentCoreAuth** - Creates authentication resources:
+   - Cognito User Pool (email/password)
+   - User Pool Client for frontend
+   - Password policy (min 8 chars, uppercase, lowercase, digit)
+6. **Create placeholder frontend build** (for initial deployment)
+7. **Deploy AgentCoreRuntime** - Deploys agent and API:
    - Uploads agent source code to S3
    - Triggers CodeBuild via Custom Resource
    - **Lambda waiter polls CodeBuild** (5-10 minutes)
    - Creates AgentCore runtime with built image
    - Creates Lambda invoker function
-   - Creates API Gateway with CORS
-7. **Build frontend with API URL** (from runtime stack outputs)
-8. **Deploy AgentCoreFrontend** - Deploys web interface:
+   - Creates API Gateway with Cognito authorizer
+8. **Build frontend with API URL and Cognito config** (from stack outputs)
+9. **Deploy AgentCoreFrontend** - Deploys web interface:
    - S3 bucket for static hosting
    - CloudFront distribution with OAC
-   - Deploys React app from frontend/dist
+   - Deploys React app with authentication UI
 
 ### Request Flow
 
-1. User enters prompt in React UI
-2. Frontend sends POST to API Gateway `/invoke`
-3. Lambda invokes AgentCore Runtime
-4. AgentCore executes agent in isolated container (microVM)
-5. Agent processes request using Strands framework + Claude 3.5 Sonnet
-6. Response returned through Lambda to frontend
+1. User signs in via Cognito (email verification required)
+2. Frontend receives JWT token from Cognito
+3. User enters prompt in React UI
+4. Frontend sends POST to API Gateway `/invoke` with JWT token in Authorization header
+5. API Gateway validates JWT token with Cognito
+6. Lambda invokes AgentCore Runtime
+7. AgentCore executes agent in isolated container (microVM)
+8. Agent processes request using Strands framework + Claude 3.5 Sonnet
+9. Response returned through Lambda to frontend
 
 ## Key Components
 
-### 1. Agent (`agent/strands_agent.py`)
+### 1. Authentication (`AgentCoreAuth` stack)
+- **Cognito User Pool** for user management
+- Email-based authentication with verification
+- Password policy: min 8 chars, uppercase, lowercase, digit
+- **Frontend integration** via amazon-cognito-identity-js
+- JWT tokens automatically included in API requests
+- Sign in/sign up modal with email confirmation flow
+
+### 2. Agent (`agent/strands_agent.py`)
 - Built with Strands Agents framework
 - Uses Claude 3.5 Sonnet model (`us.anthropic.claude-3-5-sonnet-20241022-v2:0`)
 - Includes calculator and weather tools
 - Wrapped with `@BedrockAgentCoreApp` decorator
 
-### 2. Container Build
+### 3. Container Build
 - ARM64 architecture (native AgentCore support)
 - Python 3.13 slim base image
 - Built via CodeBuild (no local Docker required)
 - Automatic build on deployment
 - Build history and logs in AWS Console
 
-### 3. Lambda Waiter (Critical Component)
+### 4. Lambda Waiter (Critical Component)
 - Custom Resource that waits for CodeBuild completion
 - Polls every 30 seconds, 15-minute timeout
 - Returns minimal response to CloudFormation (<4KB)
 - Ensures image exists before AgentCore runtime creation
 - **Why needed:** CodeBuild's `batchGetBuilds` response exceeds CloudFormation's 4KB Custom Resource limit
 
-### 4. IAM Permissions
+### 5. IAM Permissions
 The execution role includes:
 - Bedrock model invocation
 - ECR image access
@@ -184,7 +217,7 @@ The execution role includes:
 - X-Ray tracing
 - AgentCore Identity (workload access tokens)
 
-### 5. Built-in Observability
+### 6. Built-in Observability
 - **CloudWatch Logs:** `/aws/bedrock-agentcore/runtimes/strands_agent-*`
 - **X-Ray Tracing:** Distributed tracing enabled
 - **CloudWatch Metrics:** Custom metrics in `bedrock-agentcore` namespace
@@ -200,17 +233,25 @@ cd cdk
 npx cdk deploy AgentCoreInfra --no-cli-pager
 ```
 
-### 2. Deploy Runtime (triggers build automatically)
+### 2. Deploy Authentication
+```powershell
+cd cdk
+npx cdk deploy AgentCoreAuth --no-cli-pager
+```
+
+### 3. Deploy Runtime (triggers build automatically)
 ```powershell
 cd cdk
 npx cdk deploy AgentCoreRuntime --no-cli-pager
 ```
 *Note: This will pause for 5-10 minutes while CodeBuild runs*
 
-### 3. Deploy Frontend
+### 4. Deploy Frontend
 ```powershell
 $apiUrl = aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text --no-cli-pager
-.\scripts\build-frontend.ps1 -ApiUrl $apiUrl
+$userPoolId = aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text --no-cli-pager
+$userPoolClientId = aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolClientId'].OutputValue" --output text --no-cli-pager
+.\scripts\build-frontend.ps1 -ApiUrl $apiUrl -UserPoolId $userPoolId -UserPoolClientId $userPoolClientId
 cd cdk
 npx cdk deploy AgentCoreFrontend --no-cli-pager
 ```
@@ -238,16 +279,24 @@ The deployment will:
 cd cdk
 npx cdk destroy AgentCoreFrontend --no-cli-pager
 npx cdk destroy AgentCoreRuntime --no-cli-pager
+npx cdk destroy AgentCoreAuth --no-cli-pager
 npx cdk destroy AgentCoreInfra --no-cli-pager
 ```
 
+**Note:** Cognito User Pool will be deleted along with all user accounts.
+
 ## Troubleshooting
 
-### "Access Denied"
-Refresh AWS credentials:
+### "Access Denied" or "Unauthorized"
+If AWS credentials expired, refresh them:
 ```powershell
 isengardcli creds bllecoq@amazon.com --role Admin
 ```
+
+If API returns 401 Unauthorized:
+- Make sure you're signed in (check header shows your email)
+- Try signing out and back in
+- Check browser console for JWT token errors
 
 ### "Container failed to start"
 Check CloudWatch logs:
@@ -272,15 +321,24 @@ aws logs tail /aws/codebuild/bedrock-agentcore-strands-agent-builder --follow --
 ```
 
 ### Frontend shows errors
-Verify API URL is correct:
+Verify API URL and Cognito config are correct:
 ```powershell
 aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text --no-cli-pager
+aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text --no-cli-pager
+aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolClientId'].OutputValue" --output text --no-cli-pager
 ```
+
+### Email verification not received
+- Check spam/junk folder
+- Verify email address is correct
+- Wait a few minutes (can take up to 5 minutes)
+- Try signing up with a different email
 
 ### Verify deployment status
 Check all stack statuses:
 ```powershell
 aws cloudformation describe-stacks --stack-name AgentCoreInfra --query "Stacks[0].StackStatus" --no-cli-pager
+aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].StackStatus" --no-cli-pager
 aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].StackStatus" --no-cli-pager
 aws cloudformation describe-stacks --stack-name AgentCoreFrontend --query "Stacks[0].StackStatus" --no-cli-pager
 ```
@@ -297,8 +355,9 @@ CloudFormation Custom Resources have a 4KB response limit. CodeBuild's `batchGet
 - Build history and logs in AWS Console
 - Automatic image push to ECR
 
-### Why Three Stacks?
+### Why Four Stacks?
 - **AgentCoreInfra**: Rarely changes, contains build pipeline
+- **AgentCoreAuth**: Authentication resources, rarely changes
 - **AgentCoreRuntime**: Changes when agent code updates
 - **AgentCoreFrontend**: Changes when UI updates
 
@@ -309,6 +368,9 @@ AgentCore natively supports ARM64 architecture, providing better performance and
 
 ## Security
 
+- **Authentication required** - API protected by Cognito JWT tokens
+- **Email verification** - Users must verify email before access
+- **Password policy** - Enforced minimum complexity requirements
 - Frontend served via HTTPS (CloudFront)
 - AWS credentials never exposed to browser
 - CORS configured for API Gateway
@@ -316,10 +378,12 @@ AgentCore natively supports ARM64 architecture, providing better performance and
 - AgentCore Runtime runs in isolated microVMs
 - Container images scanned by ECR
 - Origin Access Control (OAC) for S3/CloudFront
+- JWT tokens stored in browser session (not localStorage)
 
 ## Cost Estimate
 
 Approximate monthly costs (us-east-1):
+- **Cognito**: Free for first 50,000 MAUs (Monthly Active Users)
 - **AgentCore Runtime**: $0.10 per hour active + $0.000008 per request
 - **Lambda**: Free tier covers most demos
 - **API Gateway**: $3.50 per million requests
@@ -328,7 +392,7 @@ Approximate monthly costs (us-east-1):
 - **ECR**: $0.10 per GB-month
 - **CodeBuild**: $0.005 per build minute (ARM64)
 
-**Typical demo cost**: < $5/month with light usage
+**Typical demo cost**: < $5/month with light usage (Cognito is free for small user bases)
 
 ## Next Steps
 
@@ -338,7 +402,9 @@ Approximate monthly costs (us-east-1):
 - **Custom Domain**: Add Route53 and ACM certificate to frontend stack
 - **Monitoring**: Set up CloudWatch alarms for errors and latency
 - **Streaming**: Implement streaming responses for better UX
-- **Authentication**: Add Cognito for user authentication
+- **MFA**: Enable multi-factor authentication in Cognito
+- **Social Login**: Add Google/Facebook OAuth to Cognito
+- **User Management**: Build admin panel for user management
 
 ## Resources
 
