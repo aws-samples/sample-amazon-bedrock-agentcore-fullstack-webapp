@@ -41,6 +41,11 @@ build/
 *~
 .kiro/
 
+# Steering docs (environment-specific)
+.kiro/steering/design-best-practices.md
+.kiro/steering/aws-credentials.md
+.kiro/steering/windows-environment.md
+
 # Logs
 *.log
 npm-debug.log*
