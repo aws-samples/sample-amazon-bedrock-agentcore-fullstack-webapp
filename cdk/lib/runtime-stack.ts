@@ -4,16 +4,21 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import * as cr from 'aws-cdk-lib/custom-resources';
 import { Construct } from 'constructs';
 
+export interface AgentCoreStackProps extends cdk.StackProps {
+  userPool: cognito.IUserPool;
+}
+
 export class AgentCoreStack extends cdk.Stack {
   public readonly agentRuntimeArn: string;
   public readonly apiUrl: string;
 
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props: AgentCoreStackProps) {
     super(scope, id, props);
 
     // Import resources from infra stack
@@ -263,8 +268,17 @@ async function sendResponse(event, status, data, reason) {
       },
     });
 
+    // Cognito authorizer
+    const authorizer = new apigateway.CognitoUserPoolsAuthorizer(this, 'CognitoAuthorizer', {
+      cognitoUserPools: [props.userPool],
+      authorizerName: 'AgentCoreAuthorizer',
+    });
+
     const invokeResource = api.root.addResource('invoke');
-    invokeResource.addMethod('POST', new apigateway.LambdaIntegration(invokeAgentLambda));
+    invokeResource.addMethod('POST', new apigateway.LambdaIntegration(invokeAgentLambda), {
+      authorizer,
+      authorizationType: apigateway.AuthorizationType.COGNITO,
+    });
 
     // Add CORS headers to gateway responses (for errors like 504)
     api.addGatewayResponse('Default4xx', {

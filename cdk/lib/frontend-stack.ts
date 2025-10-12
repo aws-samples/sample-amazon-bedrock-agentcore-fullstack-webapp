@@ -8,6 +8,8 @@ import { Construct } from 'constructs';
 
 interface FrontendStackProps extends cdk.StackProps {
   apiUrl: string;
+  userPoolId: string;
+  userPoolClientId: string;
 }
 
 export class FrontendStack extends cdk.Stack {
@@ -74,6 +76,16 @@ export class FrontendStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'BucketName', {
       value: websiteBucket.bucketName,
       description: 'S3 Bucket Name',
+    });
+
+    new cdk.CfnOutput(this, 'UserPoolId', {
+      value: props.userPoolId,
+      description: 'Cognito User Pool ID',
+    });
+
+    new cdk.CfnOutput(this, 'UserPoolClientId', {
+      value: props.userPoolClientId,
+      description: 'Cognito User Pool Client ID',
     });
   }
 }

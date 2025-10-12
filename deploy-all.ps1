@@ -31,7 +31,7 @@ npm install
 Pop-Location
 
 # Step 4: Deploy infrastructure stack
-Write-Host "`n[4/6] Deploying infrastructure stack..." -ForegroundColor Yellow
+Write-Host "`n[4/7] Deploying infrastructure stack..." -ForegroundColor Yellow
 Push-Location cdk
 npx cdk deploy AgentCoreInfra --no-cli-pager --require-approval never
 Pop-Location
@@ -41,15 +41,26 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Step 5: Create placeholder dist for initial deployment
-Write-Host "`n[5/6] Creating placeholder frontend build..." -ForegroundColor Yellow
+# Step 5: Deploy auth stack
+Write-Host "`n[5/7] Deploying authentication stack..." -ForegroundColor Yellow
+Push-Location cdk
+npx cdk deploy AgentCoreAuth --no-cli-pager --require-approval never
+Pop-Location
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Auth deployment failed" -ForegroundColor Red
+    exit 1
+}
+
+# Step 6: Create placeholder dist for initial deployment
+Write-Host "`n[6/7] Creating placeholder frontend build..." -ForegroundColor Yellow
 if (-not (Test-Path "frontend/dist")) {
     New-Item -ItemType Directory -Path "frontend/dist" -Force | Out-Null
     echo "<!DOCTYPE html><html><body><h1>Building...</h1></body></html>" > frontend/dist/index.html
 }
 
-# Step 6: Deploy backend stack (triggers build and waits via Lambda)
-Write-Host "`n[6/6] Deploying AgentCore backend stack..." -ForegroundColor Yellow
+# Step 7: Deploy backend stack (triggers build and waits via Lambda)
+Write-Host "`n[7/7] Deploying AgentCore backend stack..." -ForegroundColor Yellow
 Write-Host "Note: CodeBuild will run and Lambda will wait for completion (5-10 minutes)" -ForegroundColor Gray
 Write-Host "The stack deployment will pause while the Docker image builds..." -ForegroundColor Gray
 Push-Location cdk
@@ -61,19 +72,28 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Step 7: Get API URL and build/deploy frontend
-Write-Host "`n[7/7] Building and deploying frontend..." -ForegroundColor Yellow
+# Step 8: Get API URL and Cognito config, then build/deploy frontend
+Write-Host "`n[8/8] Building and deploying frontend..." -ForegroundColor Yellow
 $apiUrl = aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text --no-cli-pager
+$userPoolId = aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text --no-cli-pager
+$userPoolClientId = aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolClientId'].OutputValue" --output text --no-cli-pager
 
 if ([string]::IsNullOrEmpty($apiUrl)) {
     Write-Host "Failed to get API URL from stack outputs" -ForegroundColor Red
     exit 1
 }
 
-Write-Host "API URL: $apiUrl" -ForegroundColor Green
+if ([string]::IsNullOrEmpty($userPoolId) -or [string]::IsNullOrEmpty($userPoolClientId)) {
+    Write-Host "Failed to get Cognito config from stack outputs" -ForegroundColor Red
+    exit 1
+}
 
-# Build frontend with API URL
-& .\scripts\build-frontend.ps1 -ApiUrl $apiUrl
+Write-Host "API URL: $apiUrl" -ForegroundColor Green
+Write-Host "User Pool ID: $userPoolId" -ForegroundColor Green
+Write-Host "User Pool Client ID: $userPoolClientId" -ForegroundColor Green
+
+# Build frontend with API URL and Cognito config
+& .\scripts\build-frontend.ps1 -ApiUrl $apiUrl -UserPoolId $userPoolId -UserPoolClientId $userPoolClientId
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Frontend build failed" -ForegroundColor Red
@@ -96,3 +116,6 @@ $websiteUrl = aws cloudformation describe-stacks --stack-name AgentCoreFrontend 
 Write-Host "`n=== Deployment Complete ===" -ForegroundColor Green
 Write-Host "Website URL: $websiteUrl" -ForegroundColor Cyan
 Write-Host "API URL: $apiUrl" -ForegroundColor Cyan
+Write-Host "User Pool ID: $userPoolId" -ForegroundColor Cyan
+Write-Host "User Pool Client ID: $userPoolClientId" -ForegroundColor Cyan
+Write-Host "`nNote: Users must sign up and log in to use the application" -ForegroundColor Yellow

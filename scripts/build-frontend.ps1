@@ -1,12 +1,24 @@
 param(
     [Parameter(Mandatory=$true)]
-    [string]$ApiUrl
+    [string]$ApiUrl,
+    
+    [Parameter(Mandatory=$true)]
+    [string]$UserPoolId,
+    
+    [Parameter(Mandatory=$true)]
+    [string]$UserPoolClientId
 )
 
-Write-Host "Building frontend with API URL: $ApiUrl"
+Write-Host "Building frontend with:"
+Write-Host "  API URL: $ApiUrl"
+Write-Host "  User Pool ID: $UserPoolId"
+Write-Host "  User Pool Client ID: $UserPoolClientId"
 
-# Set environment variable for build
+# Set environment variables for build
 $env:VITE_API_URL = $ApiUrl
+$env:VITE_USER_POOL_ID = $UserPoolId
+$env:VITE_USER_POOL_CLIENT_ID = $UserPoolClientId
+$env:VITE_AWS_REGION = "us-east-1"
 
 # Build frontend
 Set-Location frontend
