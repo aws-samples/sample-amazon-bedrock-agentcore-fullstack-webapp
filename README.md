@@ -12,9 +12,22 @@ Full-stack AWS Bedrock AgentCore demo application with automated deployment. Dep
 
 ### One-Command Deploy
 
+**Windows (PowerShell):**
 ```powershell
 .\deploy-all.ps1
 ```
+
+**macOS/Linux (Bash):**
+```bash
+chmod +x deploy-all.sh scripts/build-frontend.sh
+./deploy-all.sh
+```
+
+> **Platform Notes:**
+> - **Windows users**: Use the PowerShell script (primary/tested version)
+> - **macOS/Linux users**: Use the bash script (cross-platform equivalent)
+> - Both scripts perform identical operations and produce the same infrastructure
+> - If you prefer PowerShell on macOS: `brew install --cask powershell` then run `pwsh deploy-all.ps1`
 
 **Time:** ~15 minutes (most time is CodeBuild creating the container image)
 
@@ -129,9 +142,11 @@ project-root/
 │   └── package.json           # Frontend dependencies
 │
 ├── scripts/
-│   └── build-frontend.ps1     # Builds React app with API URL injection
+│   ├── build-frontend.ps1     # Builds React app with API URL injection (Windows)
+│   └── build-frontend.sh      # Builds React app with API URL injection (macOS/Linux)
 │
-├── deploy-all.ps1             # Main deployment orchestration
+├── deploy-all.ps1             # Main deployment orchestration (Windows)
+├── deploy-all.sh              # Main deployment orchestration (macOS/Linux)
 └── README.md                  # This file
 ```
 
@@ -228,30 +243,42 @@ The execution role includes:
 If you prefer to deploy stacks individually:
 
 ### 1. Deploy Infrastructure
-```powershell
+```bash
 cd cdk
 npx cdk deploy AgentCoreInfra --no-cli-pager
 ```
 
 ### 2. Deploy Authentication
-```powershell
+```bash
 cd cdk
 npx cdk deploy AgentCoreAuth --no-cli-pager
 ```
 
 ### 3. Deploy Runtime (triggers build automatically)
-```powershell
+```bash
 cd cdk
 npx cdk deploy AgentCoreRuntime --no-cli-pager
 ```
 *Note: This will pause for 5-10 minutes while CodeBuild runs*
 
 ### 4. Deploy Frontend
+
+**Windows (PowerShell):**
 ```powershell
 $apiUrl = aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text --no-cli-pager
 $userPoolId = aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text --no-cli-pager
 $userPoolClientId = aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolClientId'].OutputValue" --output text --no-cli-pager
 .\scripts\build-frontend.ps1 -ApiUrl $apiUrl -UserPoolId $userPoolId -UserPoolClientId $userPoolClientId
+cd cdk
+npx cdk deploy AgentCoreFrontend --no-cli-pager
+```
+
+**macOS/Linux (Bash):**
+```bash
+API_URL=$(aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text --no-cli-pager)
+USER_POOL_ID=$(aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text --no-cli-pager)
+USER_POOL_CLIENT_ID=$(aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolClientId'].OutputValue" --output text --no-cli-pager)
+./scripts/build-frontend.sh "$API_URL" "$USER_POOL_ID" "$USER_POOL_CLIENT_ID"
 cd cdk
 npx cdk deploy AgentCoreFrontend --no-cli-pager
 ```
@@ -262,7 +289,7 @@ To modify the agent code:
 
 1. Edit `agent/strands_agent.py` or `agent/requirements.txt`
 2. Redeploy runtime stack:
-   ```powershell
+   ```bash
    cd cdk
    npx cdk deploy AgentCoreRuntime --no-cli-pager
    ```
@@ -275,7 +302,7 @@ The deployment will:
 
 ## Cleanup
 
-```powershell
+```bash
 cd cdk
 npx cdk destroy AgentCoreFrontend --no-cli-pager
 npx cdk destroy AgentCoreRuntime --no-cli-pager
@@ -289,8 +316,12 @@ npx cdk destroy AgentCoreInfra --no-cli-pager
 
 ### "Access Denied" or "Unauthorized"
 If AWS credentials expired, refresh them:
-```powershell
-isengardcli creds bllecoq@amazon.com --role Admin
+```bash
+# For internal AWS users
+isengardcli creds your-email@amazon.com --role Admin
+
+# For external users, configure AWS CLI
+aws configure
 ```
 
 If API returns 401 Unauthorized:
@@ -300,13 +331,13 @@ If API returns 401 Unauthorized:
 
 ### "Container failed to start"
 Check CloudWatch logs:
-```powershell
+```bash
 aws logs tail /aws/bedrock-agentcore/runtimes/strands_agent-* --follow --no-cli-pager
 ```
 
 ### "Image not found in ECR"
 Redeploy runtime stack - it will trigger a new build:
-```powershell
+```bash
 cd cdk
 npx cdk deploy AgentCoreRuntime --no-cli-pager
 ```
@@ -316,13 +347,13 @@ Check CodeBuild console for build status. If build is still running, wait for co
 
 ### CodeBuild fails
 Check build logs:
-```powershell
+```bash
 aws logs tail /aws/codebuild/bedrock-agentcore-strands-agent-builder --follow --no-cli-pager
 ```
 
 ### Frontend shows errors
 Verify API URL and Cognito config are correct:
-```powershell
+```bash
 aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text --no-cli-pager
 aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text --no-cli-pager
 aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolClientId'].OutputValue" --output text --no-cli-pager
@@ -336,7 +367,7 @@ aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0]
 
 ### Verify deployment status
 Check all stack statuses:
-```powershell
+```bash
 aws cloudformation describe-stacks --stack-name AgentCoreInfra --query "Stacks[0].StackStatus" --no-cli-pager
 aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].StackStatus" --no-cli-pager
 aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].StackStatus" --no-cli-pager
