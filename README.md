@@ -66,7 +66,7 @@ Try these prompts:
 │ AgentCore       │
 │ Runtime         │
 │ (ARM64 Docker)  │
-│ Claude 3.5      │
+│ Bedrock LLM     │
 └─────────────────┘
 ```
 

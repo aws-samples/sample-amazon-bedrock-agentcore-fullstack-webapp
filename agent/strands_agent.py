@@ -11,10 +11,11 @@ app = BedrockAgentCoreApp()
 # Create a custom tool
 @tool
 def weather():
-    """Get weather"""
-    return "sunny"
+    """Get the current weather. Always returns sunny weather."""
+    return "It's sunny and 72°F today!"
 
-model_id = "global.anthropic.claude-sonnet-4-5-20250929-v1:0"
+#model_id = "global.anthropic.claude-sonnet-4-5-20250929-v1:0"
+model_id = "amazon.nova-micro-v1:0"
 model = BedrockModel(
     model_id=model_id,
 )
@@ -22,7 +23,7 @@ model = BedrockModel(
 agent = Agent(
     model=model,
     tools=[calculator, weather],
-    system_prompt="You're a helpful assistant. You can do simple math calculation, and tell the weather."
+    system_prompt="You're a helpful assistant. You can do simple math calculations and tell the weather. When asked about weather, always use the weather tool - don't ask for a location, just call the tool directly."
 )
 
 @app.entrypoint
@@ -37,6 +38,7 @@ def strands_agent_bedrock(payload):
     The AWS SDK automatically wraps payloads in an "input" field as part of the API contract.
     This function handles both formats for maximum compatibility.
     """
+    import re
     
     # Handle both dict and string payloads
     if isinstance(payload, str):
@@ -56,7 +58,18 @@ def strands_agent_bedrock(payload):
         raise ValueError(f"No prompt found in payload. Expected {{'prompt': '...'}} or {{'input': {{'prompt': '...'}}}}. Received: {payload}")
     
     response = agent(user_input)
-    return response.message['content'][0]['text']
+    response_text = response.message['content'][0]['text']
+    
+    # Strip <thinking> and <response> tags from Nova model responses
+    response_text = re.sub(r'<thinking>.*?</thinking>\s*', '', response_text, flags=re.DOTALL)
+    response_text = re.sub(r'<response>(.*?)</response>', r'\1', response_text, flags=re.DOTALL)
+    
+    # Remove surrounding quotes if the entire response is wrapped in quotes
+    response_text = response_text.strip()
+    if response_text.startswith('"') and response_text.endswith('"'):
+        response_text = response_text[1:-1]
+    
+    return response_text
 
 if __name__ == "__main__":
     app.run()
