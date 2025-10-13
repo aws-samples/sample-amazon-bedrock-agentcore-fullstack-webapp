@@ -1,13 +1,15 @@
-# AgentCore Demo
+# Amazon Bedrock AgentCore - Automated Full-Stack Deployment
 
-Full-stack AWS Bedrock AgentCore demo application with automated deployment. Deploy a containerized AI agent with web interface in one command.
+Production-ready starter template for deploying AI agents with [Amazon Bedrock AgentCore](https://aws.amazon.com/bedrock/agentcore/resources/). Complete infrastructure scaffolding with authentication, API, and web interface - all automated in one command.
+
+The example agent is built with the [Strands Agents framework](https://github.com/strands-agents/) and includes calculator and weather tools to demonstrate tool integration. The focus is on deployment automation - you can easily swap the agent implementation or extend its capabilities.
 
 ## Quick Start
 
 ### Prerequisites
 - **AWS CLI** installed and configured ([Installation Guide](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html))
 - **Node.js 22+** installed
-- **AWS credentials** with admin access configured via:
+- **AWS credentials** configured with permissions for CloudFormation, Lambda, S3, ECR, CodeBuild, API Gateway, Cognito, and IAM via:
   - `aws configure` (access key/secret key)
   - AWS SSO: `aws sso login --profile <profile-name>`
   - Environment variables: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
@@ -32,7 +34,7 @@ chmod +x deploy-all.sh scripts/build-frontend.sh
 > - Both scripts perform identical operations and produce the same infrastructure
 > - If you prefer PowerShell on macOS: `brew install --cask powershell` then run `pwsh deploy-all.ps1`
 
-**Time:** ~15 minutes (most time is CodeBuild creating the container image)
+**Time:** ~10 minutes (most time is CodeBuild creating the container image)
 
 **Done!** Your app is live at the CloudFront URL shown in the output.
 
