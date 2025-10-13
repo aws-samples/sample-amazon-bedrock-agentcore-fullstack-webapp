@@ -444,6 +444,93 @@ Approximate monthly costs (us-east-1):
 
 **Typical demo cost**: < $5/month with light usage (Cognito is free for small user bases)
 
+## Customizing the UI
+
+The frontend is built with [AWS Cloudscape Design System](https://cloudscape.design/), AWS's open-source design system for building intuitive web applications. While AgentCore is the focus of this demo, the UI is designed to be easily customizable.
+
+### Why Cloudscape?
+
+- **AWS Native**: Built by AWS for AWS applications
+- **Accessibility**: WCAG 2.1 AA compliant out of the box
+- **Responsive**: Works seamlessly across devices
+- **Rich Components**: 50+ pre-built components for common patterns
+- **GenAI Patterns**: Specialized components for AI chat interfaces
+
+### Quick Customization Examples
+
+**1. Change Support Prompts** (`frontend/src/App.tsx`):
+```typescript
+// Modify the getSupportPrompts() function
+const getSupportPrompts = () => {
+  if (messages.length === 0) {
+    return [
+      { id: 'custom1', text: 'Your custom prompt here' },
+      { id: 'custom2', text: 'Another custom prompt' },
+      // Add more prompts...
+    ];
+  }
+  // Add contextual prompts based on conversation...
+};
+```
+
+**2. Change Prompt Alignment** (horizontal/vertical):
+```typescript
+<SupportPromptGroup
+  alignment="horizontal"  // or "vertical"
+  items={getSupportPrompts()}
+  // ...
+/>
+```
+
+**3. Customize Markdown Styling** (`frontend/src/markdown.css`):
+```css
+/* Change code block background */
+.markdown-content pre {
+  background-color: #f0f0f0;
+}
+
+/* Customize table styling */
+.markdown-content table th {
+  background-color: #e0e0e0;
+}
+```
+
+**4. Add More Feedback Options**:
+```typescript
+// In the ButtonGroup items array, add:
+{
+  type: 'icon-button',
+  id: 'share',
+  iconName: 'share',
+  text: 'Share',
+}
+```
+
+**5. Change App Theme Colors**:
+Cloudscape uses design tokens. Create `frontend/src/theme.css`:
+```css
+:root {
+  --awsui-color-text-heading-default: #your-color;
+  --awsui-color-background-container-content: #your-bg;
+}
+```
+
+### Cloudscape Resources
+
+- [Component Library](https://cloudscape.design/components/)
+- [GenAI Chat Patterns](https://cloudscape.design/patterns/genai/generative-AI-chat/)
+- [Design Tokens](https://cloudscape.design/foundation/visual-foundation/design-tokens/)
+- [GitHub Repository](https://github.com/cloudscape-design/components)
+
+### Key UI Features in This Demo
+
+- **Chat Components**: `ChatBubble`, `Avatar`, `SupportPromptGroup`
+- **Markdown Rendering**: Full markdown support with `react-markdown`
+- **Feedback Buttons**: Thumbs up/down and copy functionality
+- **Authentication UI**: Sign in/sign up modal with Cognito
+- **Responsive Layout**: 3-column grid that adapts to screen size
+- **Design Tokens**: Consistent styling using Cloudscape tokens
+
 ## Next Steps
 
 - **Change Model**: Edit `model_id` in `agent/strands_agent.py` (try different Nova or Claude models)

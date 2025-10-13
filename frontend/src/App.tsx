@@ -9,7 +9,9 @@ import Button from '@cloudscape-design/components/button';
 import ButtonGroup from '@cloudscape-design/components/button-group';
 import Grid from '@cloudscape-design/components/grid';
 import StatusIndicator from '@cloudscape-design/components/status-indicator';
-import { ChatBubble, Avatar } from '@cloudscape-design/chat-components';
+import ChatBubble from '@cloudscape-design/chat-components/chat-bubble';
+import Avatar from '@cloudscape-design/chat-components/avatar';
+import SupportPromptGroup from '@cloudscape-design/chat-components/support-prompt-group';
 import PromptInput from '@cloudscape-design/components/prompt-input';
 import Alert from '@cloudscape-design/components/alert';
 import ReactMarkdown from 'react-markdown';
@@ -45,6 +47,7 @@ function App() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [messageFeedback, setMessageFeedback] = useState<MessageFeedback>({});
+  const [showSupportPrompts, setShowSupportPrompts] = useState(true);
 
   useEffect(() => {
     checkAuth();
@@ -128,6 +131,13 @@ function App() {
     return cleaned;
   };
 
+  const handleSupportPromptClick = (promptText: string) => {
+    // Fill the prompt input with the selected text
+    setPrompt(promptText);
+    // Hide support prompts after selection
+    setShowSupportPrompts(false);
+  };
+
   const invokeAgent = async () => {
     if (!user) {
       setShowAuthModal(true);
@@ -138,6 +148,9 @@ function App() {
       setError('Please enter a prompt');
       return;
     }
+
+    // Hide support prompts when sending a message
+    setShowSupportPrompts(false);
 
     const userMessage: Message = {
       type: 'user',
@@ -179,11 +192,67 @@ function App() {
       };
 
       setMessages(prev => [...prev, agentMessage]);
+
+      // Show support prompts after agent responds
+      setShowSupportPrompts(true);
     } catch (err: any) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Get contextual support prompts based on conversation
+  const getSupportPrompts = () => {
+    // Initial prompts when no messages
+    if (messages.length === 0) {
+      return [
+        { id: 'calc', text: 'What is 123 + 456?' },
+        { id: 'weather', text: "What's the weather like today?" },
+        { id: 'table', text: 'Create a comparison table of 3 AWS services' },
+        { id: 'math', text: 'Calculate 2048 * 1024 and explain the result' }
+      ];
+    }
+
+    // Contextual prompts based on last message
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage.type === 'agent') {
+      const content = lastMessage.content.toLowerCase();
+
+      // After calculation
+      if (content.includes('result') || content.includes('sum') || content.includes('calculation')) {
+        return [
+          { id: 'another-calc', text: 'Can you do another calculation?' },
+          { id: 'weather-follow', text: "What's the weather?" },
+          { id: 'explain', text: 'Can you explain that in more detail?' }
+        ];
+      }
+
+      // After weather
+      if (content.includes('weather') || content.includes('sunny') || content.includes('°f')) {
+        return [
+          { id: 'calc-follow', text: 'What is 999 + 111?' },
+          { id: 'table-follow', text: 'Show me a table with sample data' },
+          { id: 'thanks', text: 'Thank you!' }
+        ];
+      }
+
+      // After table
+      if (content.includes('|') || content.includes('table')) {
+        return [
+          { id: 'another-table', text: 'Create another table with different data' },
+          { id: 'calc-after-table', text: 'Calculate 15 * 12' },
+          { id: 'format', text: 'Can you format that differently?' }
+        ];
+      }
+    }
+
+    // Default follow-up prompts
+    return [
+      { id: 'more', text: 'Tell me more' },
+      { id: 'calc-default', text: 'Do a calculation' },
+      { id: 'weather-default', text: 'Check the weather' }
+    ];
   };
 
 
@@ -427,6 +496,17 @@ function App() {
                             </div>
                           )}
                         </div>
+                      )}
+
+                      {showSupportPrompts && !loading && (
+                        <SupportPromptGroup
+                          onItemClick={({ detail }) => handleSupportPromptClick(
+                            getSupportPrompts().find(p => p.id === detail.id)?.text || ''
+                          )}
+                          ariaLabel="Suggested prompts"
+                          alignment="horizontal"
+                          items={getSupportPrompts()}
+                        />
                       )}
 
                       <PromptInput
