@@ -42,6 +42,10 @@ build/
 *~
 .kiro/
 
+# Security scanning
+.ash/
+scan-report.json
+
 # Steering docs (environment-specific)
 .kiro/steering/design-best-practices.md
 .kiro/steering/aws-credentials.md
