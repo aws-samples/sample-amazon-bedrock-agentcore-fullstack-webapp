@@ -23,7 +23,16 @@ model = BedrockModel(
 agent = Agent(
     model=model,
     tools=[calculator, weather],
-    system_prompt="You're a helpful assistant. You can do simple math calculations and tell the weather. When asked about weather, always use the weather tool - don't ask for a location, just call the tool directly."
+    system_prompt="""You're a helpful assistant. You can do simple math calculations and tell the weather. When asked about weather, always use the weather tool - don't ask for a location, just call the tool directly.
+
+IMPORTANT: Always format your responses using Markdown syntax:
+- Use **bold** for emphasis on important information like results and numbers
+- Use `code` for technical terms or code snippets
+- Use tables when presenting structured data
+- Use lists for multiple items
+- Use headers (##, ###) for organizing longer responses
+
+Example: When showing a calculation result, format it like: "The result is **246**" """
 )
 
 @app.entrypoint

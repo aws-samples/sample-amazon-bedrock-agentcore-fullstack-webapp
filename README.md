@@ -5,9 +5,12 @@ Full-stack AWS Bedrock AgentCore demo application with automated deployment. Dep
 ## Quick Start
 
 ### Prerequisites
-- AWS CLI configured
-- Node.js 22+ installed
-- AWS credentials with admin access
+- **AWS CLI** installed and configured ([Installation Guide](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html))
+- **Node.js 22+** installed
+- **AWS credentials** with admin access configured via:
+  - `aws configure` (access key/secret key)
+  - AWS SSO: `aws sso login --profile <profile-name>`
+  - Environment variables: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
 - **No Docker required!** (CodeBuild handles container builds)
 
 ### One-Command Deploy
@@ -24,8 +27,8 @@ chmod +x deploy-all.sh scripts/build-frontend.sh
 ```
 
 > **Platform Notes:**
-> - **Windows users**: Use the PowerShell script (primary/tested version)
-> - **macOS/Linux users**: Use the bash script (cross-platform equivalent)
+> - **Windows users**: Use the PowerShell script (`.ps1`)
+> - **macOS/Linux users**: Use the bash script (`.sh`)
 > - Both scripts perform identical operations and produce the same infrastructure
 > - If you prefer PowerShell on macOS: `brew install --cask powershell` then run `pwsh deploy-all.ps1`
 
@@ -44,7 +47,7 @@ chmod +x deploy-all.sh scripts/build-frontend.sh
    - Enter the code to confirm
 4. You'll be automatically signed in
 5. Enter a prompt: "What is 42 + 58?"
-6. See the response from Claude 3.5 Sonnet!
+6. See the response from Amazon Nova!
 
 Try these prompts:
 - "What's the weather like today?"
@@ -191,7 +194,7 @@ The `deploy-all.ps1` script orchestrates the complete deployment:
 5. API Gateway validates JWT token with Cognito
 6. Lambda invokes AgentCore Runtime
 7. AgentCore executes agent in isolated container (microVM)
-8. Agent processes request using Strands framework + Claude 3.5 Sonnet
+8. Agent processes request using Strands framework + Amazon Nova
 9. Response returned through Lambda to frontend
 
 ## Key Components
@@ -206,7 +209,7 @@ The `deploy-all.ps1` script orchestrates the complete deployment:
 
 ### 2. Agent (`agent/strands_agent.py`)
 - Built with Strands Agents framework
-- Uses Claude 3.5 Sonnet model (`us.anthropic.claude-3-5-sonnet-20241022-v2:0`)
+- Uses Amazon Nova model
 - Includes calculator and weather tools
 - Wrapped with `@BedrockAgentCoreApp` decorator
 
@@ -315,13 +318,29 @@ npx cdk destroy AgentCoreInfra --no-cli-pager
 ## Troubleshooting
 
 ### "Access Denied" or "Unauthorized"
-If AWS credentials expired, refresh them:
-```bash
-# For internal AWS users
-isengardcli creds your-email@amazon.com --role Admin
+If AWS credentials are not configured or have expired:
 
-# For external users, configure AWS CLI
+**Option 1: Configure with access keys**
+```bash
 aws configure
+```
+
+**Option 2: Use AWS SSO**
+```bash
+aws sso login --profile <profile-name>
+export AWS_PROFILE=<profile-name>
+```
+
+**Option 3: Set environment variables**
+```bash
+export AWS_ACCESS_KEY_ID=your-access-key
+export AWS_SECRET_ACCESS_KEY=your-secret-key
+export AWS_DEFAULT_REGION=us-east-1
+```
+
+**Verify credentials are working:**
+```bash
+aws sts get-caller-identity
 ```
 
 If API returns 401 Unauthorized:
@@ -427,7 +446,7 @@ Approximate monthly costs (us-east-1):
 
 ## Next Steps
 
-- **Change Model**: Edit `model_id` in `agent/strands_agent.py` (try different Claude versions or Nova models)
+- **Change Model**: Edit `model_id` in `agent/strands_agent.py` (try different Nova or Claude models)
 - **Add Tools**: Create custom `@tool` functions in the agent
 - **Add Memory**: Integrate AgentCore Memory for persistent context
 - **Custom Domain**: Add Route53 and ACM certificate to frontend stack

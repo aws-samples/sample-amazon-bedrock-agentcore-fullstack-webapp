@@ -1,0 +1,68 @@
+/* Markdown styling for chat messages using Cloudscape design tokens */
+/* This extends Cloudscape global styles with markdown-specific formatting */
+
+.markdown-content {
+  line-height: var(--awsui-line-height-body-m, 1.6);
+  color: var(--awsui-color-text-body-default, #000716);
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
+  margin-top: var(--awsui-space-scaled-m, 16px);
+  margin-bottom: var(--awsui-space-scaled-xs, 8px);
+  font-weight: var(--awsui-font-weight-bold, 700);
+  color: var(--awsui-color-text-heading-default, #000716);
+}
+
+.markdown-content h1 {
+  font-size: var(--awsui-font-size-heading-l, 1.5rem);
+}
+
+.markdown-content h2 {
+  font-size: var(--awsui-font-size-heading-m, 1.25rem);
+}
+
+.markdown-content h3 {
+  font-size: var(--awsui-font-size-heading-s, 1.125rem);
+}
+
+.markdown-content blockquote {
+  border-left: 4px solid var(--awsui-color-border-divider-default, #d1d5db);
+  padding-left: var(--awsui-space-scaled-m, 16px);
+  margin-left: 0;
+  color: var(--awsui-color-text-body-secondary, #5f6b7a);
+}
+
+.markdown-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: var(--awsui-space-scaled-s, 12px) 0;
+  border: 1px solid var(--awsui-color-border-divider-default, #d1d5db);
+}
+
+.markdown-content table th,
+.markdown-content table td {
+  border: 1px solid var(--awsui-color-border-divider-default, #d1d5db);
+  padding: var(--awsui-space-scaled-xs, 8px) var(--awsui-space-scaled-s, 12px);
+  text-align: left;
+}
+
+.markdown-content table th {
+  background-color: var(--awsui-color-background-container-header, #fafafa);
+  font-weight: var(--awsui-font-weight-bold, 700);
+}
+
+.markdown-content hr {
+  border: none;
+  border-top: 1px solid var(--awsui-color-border-divider-default, #d1d5db);
+  margin: var(--awsui-space-scaled-m, 16px) 0;
+}
+
+.markdown-content img {
+  max-width: 100%;
+  height: auto;
+}

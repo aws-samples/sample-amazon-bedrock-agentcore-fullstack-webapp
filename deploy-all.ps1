@@ -2,25 +2,43 @@
 
 Write-Host "=== AgentCore Demo Deployment ===" -ForegroundColor Cyan
 
-# Step 1: Refresh AWS credentials
-Write-Host "`n[1/5] Refreshing AWS credentials..." -ForegroundColor Yellow
-isengardcli creds bllecoq@amazon.com --role Admin
+# Step 1: Verify AWS credentials
+Write-Host "`n[1/8] Verifying AWS credentials..." -ForegroundColor Yellow
+Write-Host "      (Checking AWS CLI configuration and validating access)" -ForegroundColor Gray
+
+# Check if AWS credentials are configured
+$callerIdentity = aws sts get-caller-identity 2>&1
 
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "Failed to refresh credentials" -ForegroundColor Red
+    Write-Host "AWS credentials are not configured or have expired" -ForegroundColor Red
+    Write-Host "`nPlease configure AWS credentials using one of these methods:" -ForegroundColor Yellow
+    Write-Host "  1. Run: aws configure" -ForegroundColor Cyan
+    Write-Host "  2. Set environment variables: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY" -ForegroundColor Cyan
+    Write-Host "  3. Use AWS SSO: aws sso login --profile <profile-name>" -ForegroundColor Cyan
+    Write-Host "`nFor more info: https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html" -ForegroundColor Gray
     exit 1
 }
 
+# Display current AWS identity
+$accountId = ($callerIdentity | ConvertFrom-Json).Account
+$arn = ($callerIdentity | ConvertFrom-Json).Arn
+Write-Host "      Authenticated as: $arn" -ForegroundColor Green
+Write-Host "      AWS Account: $accountId" -ForegroundColor Green
+
 # Step 2: Install CDK dependencies
-Write-Host "`n[2/6] Installing CDK dependencies..." -ForegroundColor Yellow
+Write-Host "`n[2/8] Installing CDK dependencies..." -ForegroundColor Yellow
+Write-Host "      (Installing AWS CDK libraries and TypeScript packages for infrastructure code)" -ForegroundColor Gray
 if (-not (Test-Path "cdk/node_modules")) {
     Push-Location cdk
     npm install
     Pop-Location
+} else {
+    Write-Host "      CDK dependencies already installed, skipping..." -ForegroundColor Gray
 }
 
 # Step 3: Install frontend dependencies
-Write-Host "`n[3/6] Installing frontend dependencies..." -ForegroundColor Yellow
+Write-Host "`n[3/8] Installing frontend dependencies..." -ForegroundColor Yellow
+Write-Host "      (Installing React, Vite, Cognito SDK, and UI component libraries)" -ForegroundColor Gray
 Push-Location frontend
 # Commented out to save time during development - uncomment for clean builds
 # if (Test-Path "node_modules") {
@@ -31,7 +49,8 @@ npm install
 Pop-Location
 
 # Step 4: Deploy infrastructure stack
-Write-Host "`n[4/7] Deploying infrastructure stack..." -ForegroundColor Yellow
+Write-Host "`n[4/8] Deploying infrastructure stack..." -ForegroundColor Yellow
+Write-Host "      (Creating ECR repository, CodeBuild project, S3 bucket, and IAM roles)" -ForegroundColor Gray
 Push-Location cdk
 npx cdk deploy AgentCoreInfra --no-cli-pager --require-approval never
 Pop-Location
@@ -42,7 +61,8 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # Step 5: Deploy auth stack
-Write-Host "`n[5/7] Deploying authentication stack..." -ForegroundColor Yellow
+Write-Host "`n[5/8] Deploying authentication stack..." -ForegroundColor Yellow
+Write-Host "      (Creating Cognito User Pool with email verification and password policies)" -ForegroundColor Gray
 Push-Location cdk
 npx cdk deploy AgentCoreAuth --no-cli-pager --require-approval never
 Pop-Location
@@ -53,16 +73,20 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # Step 6: Create placeholder dist for initial deployment
-Write-Host "`n[6/7] Creating placeholder frontend build..." -ForegroundColor Yellow
+Write-Host "`n[6/8] Creating placeholder frontend build..." -ForegroundColor Yellow
+Write-Host "      (Generating temporary HTML file to satisfy S3 deployment requirements)" -ForegroundColor Gray
 if (-not (Test-Path "frontend/dist")) {
     New-Item -ItemType Directory -Path "frontend/dist" -Force | Out-Null
     echo "<!DOCTYPE html><html><body><h1>Building...</h1></body></html>" > frontend/dist/index.html
+} else {
+    Write-Host "      Placeholder already exists, skipping..." -ForegroundColor Gray
 }
 
 # Step 7: Deploy backend stack (triggers build and waits via Lambda)
-Write-Host "`n[7/7] Deploying AgentCore backend stack..." -ForegroundColor Yellow
-Write-Host "Note: CodeBuild will run and Lambda will wait for completion (5-10 minutes)" -ForegroundColor Gray
-Write-Host "The stack deployment will pause while the Docker image builds..." -ForegroundColor Gray
+Write-Host "`n[7/8] Deploying AgentCore backend stack..." -ForegroundColor Yellow
+Write-Host "      (Uploading agent code, building ARM64 Docker image, creating AgentCore runtime, Lambda, and API Gateway)" -ForegroundColor Gray
+Write-Host "      Note: CodeBuild will compile the container image - this takes 5-10 minutes" -ForegroundColor DarkGray
+Write-Host "      The deployment will pause while waiting for the build to complete..." -ForegroundColor DarkGray
 Push-Location cdk
 npx cdk deploy AgentCoreRuntime --no-cli-pager --require-approval never
 Pop-Location
@@ -74,6 +98,7 @@ if ($LASTEXITCODE -ne 0) {
 
 # Step 8: Get API URL and Cognito config, then build/deploy frontend
 Write-Host "`n[8/8] Building and deploying frontend..." -ForegroundColor Yellow
+Write-Host "      (Retrieving API endpoint and Cognito config, building React app, deploying to S3 + CloudFront)" -ForegroundColor Gray
 $apiUrl = aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text --no-cli-pager
 $userPoolId = aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text --no-cli-pager
 $userPoolClientId = aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolClientId'].OutputValue" --output text --no-cli-pager
