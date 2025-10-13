@@ -29,6 +29,7 @@ export class FrontendStack extends cdk.Stack {
     });
 
     const distribution = new cloudfront.Distribution(this, 'Distribution', {
+      comment: 'Amazon Bedrock AgentCore Demo - Frontend Distribution',
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(websiteBucket, {
           originAccessControl,
