@@ -47,7 +47,7 @@ chmod +x deploy-all.sh scripts/build-frontend.sh
    - Enter the code to confirm
 4. You'll be automatically signed in
 5. Enter a prompt: "What is 42 + 58?"
-6. See the response from Amazon Nova!
+6. See the response from Claude Sonnet!
 
 Try these prompts:
 - "What's the weather like today?"
@@ -194,7 +194,7 @@ The `deploy-all.ps1` script orchestrates the complete deployment:
 5. API Gateway validates JWT token with Cognito
 6. Lambda invokes AgentCore Runtime
 7. AgentCore executes agent in isolated container (microVM)
-8. Agent processes request using Strands framework + Amazon Nova
+8. Agent processes request using Strands framework + Anthropic Claude Sonnet 4.5
 9. Response returned through Lambda to frontend
 
 ## Key Components
@@ -209,7 +209,7 @@ The `deploy-all.ps1` script orchestrates the complete deployment:
 
 ### 2. Agent (`agent/strands_agent.py`)
 - Built with Strands Agents framework
-- Uses Amazon Nova model
+- Uses Anthropic Claude Sonnet 4.5
 - Includes calculator and weather tools
 - Wrapped with `@BedrockAgentCoreApp` decorator
 
@@ -533,7 +533,7 @@ Cloudscape uses design tokens. Create `frontend/src/theme.css`:
 
 ## Next Steps
 
-- **Change Model**: Edit `model_id` in `agent/strands_agent.py` (try different Nova or Claude models)
+- **Change Model**: Edit `model_id` in `agent/strands_agent.py` (try different Amazon Nova or Anthropic models)
 - **Add Tools**: Create custom `@tool` functions in the agent
 - **Add Memory**: Integrate AgentCore Memory for persistent context
 - **Custom Domain**: Add Route53 and ACM certificate to frontend stack

@@ -299,10 +299,19 @@ function App() {
                       <Box variant="p">
                         {user.email}
                       </Box>
-                      <Button onClick={handleSignOut}>Sign Out</Button>
+                      <Button
+                        onClick={handleSignOut}
+                        iconName="user-profile-active"
+                      >
+                        Sign Out
+                      </Button>
                     </SpaceBetween>
                   ) : (
-                    <Button variant="primary" onClick={() => setShowAuthModal(true)}>
+                    <Button
+                      variant="primary"
+                      onClick={() => setShowAuthModal(true)}
+                      iconName="user-profile"
+                    >
                       Sign In
                     </Button>
                   )

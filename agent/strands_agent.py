@@ -1,6 +1,5 @@
 from strands import Agent, tool
 from strands_tools import calculator # Import the calculator tool
-import argparse
 import json
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from strands.models import BedrockModel
@@ -14,8 +13,7 @@ def weather():
     """Get the current weather. Always returns sunny weather."""
     return "It's sunny and 72°F today!"
 
-#model_id = "global.anthropic.claude-sonnet-4-5-20250929-v1:0"
-model_id = "amazon.nova-micro-v1:0"
+model_id = "global.anthropic.claude-sonnet-4-5-20250929-v1:0"
 model = BedrockModel(
     model_id=model_id,
 )
@@ -23,16 +21,7 @@ model = BedrockModel(
 agent = Agent(
     model=model,
     tools=[calculator, weather],
-    system_prompt="""You're a helpful assistant. You can do simple math calculations and tell the weather. When asked about weather, always use the weather tool - don't ask for a location, just call the tool directly.
-
-IMPORTANT: Always format your responses using Markdown syntax:
-- Use **bold** for emphasis on important information like results and numbers
-- Use `code` for technical terms or code snippets
-- Use tables when presenting structured data
-- Use lists for multiple items
-- Use headers (##, ###) for organizing longer responses
-
-Example: When showing a calculation result, format it like: "The result is **246**" """
+    system_prompt="You're a helpful assistant. You can do simple math calculation, and tell the weather."
 )
 
 @app.entrypoint
@@ -47,8 +36,6 @@ def strands_agent_bedrock(payload):
     The AWS SDK automatically wraps payloads in an "input" field as part of the API contract.
     This function handles both formats for maximum compatibility.
     """
-    import re
-    
     # Handle both dict and string payloads
     if isinstance(payload, str):
         payload = json.loads(payload)
@@ -68,15 +55,6 @@ def strands_agent_bedrock(payload):
     
     response = agent(user_input)
     response_text = response.message['content'][0]['text']
-    
-    # Strip <thinking> and <response> tags from Nova model responses
-    response_text = re.sub(r'<thinking>.*?</thinking>\s*', '', response_text, flags=re.DOTALL)
-    response_text = re.sub(r'<response>(.*?)</response>', r'\1', response_text, flags=re.DOTALL)
-    
-    # Remove surrounding quotes if the entire response is wrapped in quotes
-    response_text = response_text.strip()
-    if response_text.startswith('"') and response_text.endswith('"'):
-        response_text = response_text[1:-1]
     
     return response_text
 
