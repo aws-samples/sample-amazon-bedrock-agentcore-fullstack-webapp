@@ -360,7 +360,7 @@ function App() {
                                       remarkPlugins={[remarkGfm]}
                                       components={{
                                         // Style code blocks
-                                        code: ({ node, className, children, ...props }: any) => {
+                                        code: ({ className, children }: any) => {
                                           const inline = !className;
                                           return inline ? (
                                             <code style={{
@@ -369,7 +369,7 @@ function App() {
                                               borderRadius: '3px',
                                               fontFamily: 'monospace',
                                               fontSize: '0.9em'
-                                            }} {...props}>
+                                            }}>
                                               {children}
                                             </code>
                                           ) : (
@@ -381,32 +381,32 @@ function App() {
                                               fontFamily: 'monospace',
                                               fontSize: '0.9em'
                                             }}>
-                                              <code className={className} {...props}>
+                                              <code className={className}>
                                                 {children}
                                               </code>
                                             </pre>
                                           );
                                         },
                                         // Style links
-                                        a: ({ node, children, ...props }: any) => (
-                                          <a style={{ color: '#0972d3' }} {...props}>
+                                        a: ({ children, href }: any) => (
+                                          <a href={href} style={{ color: '#0972d3' }} target="_blank" rel="noopener noreferrer">
                                             {children}
                                           </a>
                                         ),
                                         // Style lists
-                                        ul: ({ node, children, ...props }: any) => (
-                                          <ul style={{ marginLeft: '20px', marginTop: '8px', marginBottom: '8px' }} {...props}>
+                                        ul: ({ children }: any) => (
+                                          <ul style={{ marginLeft: '20px', marginTop: '8px', marginBottom: '8px' }}>
                                             {children}
                                           </ul>
                                         ),
-                                        ol: ({ node, children, ...props }: any) => (
-                                          <ol style={{ marginLeft: '20px', marginTop: '8px', marginBottom: '8px' }} {...props}>
+                                        ol: ({ children }: any) => (
+                                          <ol style={{ marginLeft: '20px', marginTop: '8px', marginBottom: '8px' }}>
                                             {children}
                                           </ol>
                                         ),
                                         // Style paragraphs
-                                        p: ({ node, children, ...props }: any) => (
-                                          <p style={{ marginTop: '8px', marginBottom: '8px' }} {...props}>
+                                        p: ({ children }: any) => (
+                                          <p style={{ marginTop: '8px', marginBottom: '8px' }}>
                                             {children}
                                           </p>
                                         ),
@@ -472,7 +472,7 @@ function App() {
                                       />
                                       {feedback?.feedback && (
                                         <Box margin={{ top: 'xs' }} color="text-status-info" fontSize="body-s">
-                                          {feedback.feedback === 'helpful' ? 'Feedback submitted' : 'Feedback submitted'}
+                                          Feedback submitted
                                         </Box>
                                       )}
                                     </div>
