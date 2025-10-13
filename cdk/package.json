@@ -18,17 +18,17 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "aws-cdk": "^2.170.0",
+    "@types/node": "^20.19.20",
+    "aws-cdk": "^2.1030.0",
     "source-map-support": "^0.5.21",
-    "typescript": "^5.0.0",
+    "typescript": "^5.9.3",
     "@cloudscape-design/chat-components": "^1.0.67",
-    "@cloudscape-design/components": "^3.0.1107",
-    "@cloudscape-design/design-tokens": "^3.0.0",
-    "@cloudscape-design/global-styles": "^1.0.0"
+    "@cloudscape-design/components": "^3.0.1109",
+    "@cloudscape-design/design-tokens": "^3.0.62",
+    "@cloudscape-design/global-styles": "^1.0.46"
   },
   "dependencies": {
-    "aws-cdk-lib": "^2.170.0",
-    "constructs": "^10.0.0"
+    "aws-cdk-lib": "^2.219.0",
+    "constructs": "^10.4.2"
   }
 }

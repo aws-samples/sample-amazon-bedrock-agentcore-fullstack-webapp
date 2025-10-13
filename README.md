@@ -159,7 +159,7 @@ project-root/
 
 The `deploy-all.ps1` script orchestrates the complete deployment:
 
-1. **Refresh AWS credentials** using isengardcli
+1. **Verify AWS credentials** (checks AWS CLI configuration)
 2. **Install CDK dependencies** (cdk/node_modules)
 3. **Install frontend dependencies** (frontend/node_modules, includes amazon-cognito-identity-js)
 4. **Deploy AgentCoreInfra** - Creates build pipeline resources:
