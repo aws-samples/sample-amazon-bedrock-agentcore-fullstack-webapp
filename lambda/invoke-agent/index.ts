@@ -32,7 +32,20 @@ export const handler = async (event: any) => {
 
     const command = new InvokeAgentRuntimeCommand(input);
     const response = await client.send(command);
-    const textResponse = response.response ? await response.response.transformToString() : '';
+    
+    if (!response.response) {
+      console.error('No response stream from AgentCore');
+      throw new Error('Agent returned no response');
+    }
+    
+    const textResponse = await response.response.transformToString();
+    
+    if (!textResponse || textResponse.trim() === '') {
+      console.error('Empty response from AgentCore');
+      throw new Error('Agent returned empty response');
+    }
+    
+    console.log('Agent response length:', textResponse.length);
 
     return {
       statusCode: 200,
