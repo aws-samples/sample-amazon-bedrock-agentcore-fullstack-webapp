@@ -28,5 +28,9 @@ USER bedrock_agentcore
 # AgentCore HTTP endpoint
 EXPOSE 8080
 
+# Health check using the /ping endpoint provided by AgentCore SDK
+HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/ping', timeout=3)" || exit 1
+
 # Run agent with OpenTelemetry instrumentation
 CMD ["opentelemetry-instrument", "python", "-m", "strands_agent"]
