@@ -50,6 +50,17 @@ pushd frontend > /dev/null
 npm install
 popd > /dev/null
 
+# Step 3.5: Create placeholder dist BEFORE any CDK commands
+# (CDK synthesizes all stacks even when deploying one, so frontend/dist must exist)
+echo -e "\n\033[0;33m[3.5/8] Creating placeholder frontend build...\033[0m"
+echo -e "\033[0;90m      (Generating temporary HTML file - required for CDK synthesis)\033[0m"
+if [ ! -d "frontend/dist" ]; then
+    mkdir -p frontend/dist
+    echo "<!DOCTYPE html><html><body><h1>Building...</h1></body></html>" > frontend/dist/index.html
+else
+    echo -e "\033[0;90m      Placeholder already exists, skipping...\033[0m"
+fi
+
 # Step 4: Deploy infrastructure stack
 echo -e "\n\033[0;33m[4/8] Deploying infrastructure stack...\033[0m"
 echo -e "\033[0;90m      (Creating ECR repository, CodeBuild project, S3 bucket, and IAM roles)\033[0m"
@@ -64,18 +75,8 @@ pushd cdk > /dev/null
 npx cdk deploy AgentCoreAuth --no-cli-pager --require-approval never
 popd > /dev/null
 
-# Step 6: Create placeholder dist for initial deployment
-echo -e "\n\033[0;33m[6/8] Creating placeholder frontend build...\033[0m"
-echo -e "\033[0;90m      (Generating temporary HTML file to satisfy S3 deployment requirements)\033[0m"
-if [ ! -d "frontend/dist" ]; then
-    mkdir -p frontend/dist
-    echo "<!DOCTYPE html><html><body><h1>Building...</h1></body></html>" > frontend/dist/index.html
-else
-    echo -e "\033[0;90m      Placeholder already exists, skipping...\033[0m"
-fi
-
-# Step 7: Deploy backend stack (triggers build and waits via Lambda)
-echo -e "\n\033[0;33m[7/8] Deploying AgentCore backend stack...\033[0m"
+# Step 6: Deploy backend stack (triggers build and waits via Lambda)
+echo -e "\n\033[0;33m[6/8] Deploying AgentCore backend stack...\033[0m"
 echo -e "\033[0;90m      (Uploading agent code, building ARM64 Docker image, creating AgentCore runtime, Lambda, and API Gateway)\033[0m"
 echo -e "\033[0;90m      Note: CodeBuild will compile the container image - this takes 5-10 minutes\033[0m"
 echo -e "\033[0;90m      The deployment will pause while waiting for the build to complete...\033[0m"
@@ -83,8 +84,8 @@ pushd cdk > /dev/null
 npx cdk deploy AgentCoreRuntime --no-cli-pager --require-approval never
 popd > /dev/null
 
-# Step 8: Get API URL and Cognito config, then build/deploy frontend
-echo -e "\n\033[0;33m[8/8] Building and deploying frontend...\033[0m"
+# Step 7: Get API URL and Cognito config, then build/deploy frontend
+echo -e "\n\033[0;33m[7/8] Building and deploying frontend...\033[0m"
 echo -e "\033[0;90m      (Retrieving API endpoint and Cognito config, building React app, deploying to S3 + CloudFront)\033[0m"
 API_URL=$(aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text --no-cli-pager)
 USER_POOL_ID=$(aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text --no-cli-pager)

@@ -48,6 +48,17 @@ Push-Location frontend
 npm install
 Pop-Location
 
+# Step 3.5: Create placeholder dist BEFORE any CDK commands
+# (CDK synthesizes all stacks even when deploying one, so frontend/dist must exist)
+Write-Host "`n[3.5/8] Creating placeholder frontend build..." -ForegroundColor Yellow
+Write-Host "      (Generating temporary HTML file - required for CDK synthesis)" -ForegroundColor Gray
+if (-not (Test-Path "frontend/dist")) {
+    New-Item -ItemType Directory -Path "frontend/dist" -Force | Out-Null
+    echo "<!DOCTYPE html><html><body><h1>Building...</h1></body></html>" > frontend/dist/index.html
+} else {
+    Write-Host "      Placeholder already exists, skipping..." -ForegroundColor Gray
+}
+
 # Step 4: Deploy infrastructure stack
 Write-Host "`n[4/8] Deploying infrastructure stack..." -ForegroundColor Yellow
 Write-Host "      (Creating ECR repository, CodeBuild project, S3 bucket, and IAM roles)" -ForegroundColor Gray
@@ -72,18 +83,8 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Step 6: Create placeholder dist for initial deployment
-Write-Host "`n[6/8] Creating placeholder frontend build..." -ForegroundColor Yellow
-Write-Host "      (Generating temporary HTML file to satisfy S3 deployment requirements)" -ForegroundColor Gray
-if (-not (Test-Path "frontend/dist")) {
-    New-Item -ItemType Directory -Path "frontend/dist" -Force | Out-Null
-    echo "<!DOCTYPE html><html><body><h1>Building...</h1></body></html>" > frontend/dist/index.html
-} else {
-    Write-Host "      Placeholder already exists, skipping..." -ForegroundColor Gray
-}
-
-# Step 7: Deploy backend stack (triggers build and waits via Lambda)
-Write-Host "`n[7/8] Deploying AgentCore backend stack..." -ForegroundColor Yellow
+# Step 6: Deploy backend stack (triggers build and waits via Lambda)
+Write-Host "`n[6/8] Deploying AgentCore backend stack..." -ForegroundColor Yellow
 Write-Host "      (Uploading agent code, building ARM64 Docker image, creating AgentCore runtime, Lambda, and API Gateway)" -ForegroundColor Gray
 Write-Host "      Note: CodeBuild will compile the container image - this takes 5-10 minutes" -ForegroundColor DarkGray
 Write-Host "      The deployment will pause while waiting for the build to complete..." -ForegroundColor DarkGray
@@ -96,8 +97,8 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Step 8: Get API URL and Cognito config, then build/deploy frontend
-Write-Host "`n[8/8] Building and deploying frontend..." -ForegroundColor Yellow
+# Step 7: Get API URL and Cognito config, then build/deploy frontend
+Write-Host "`n[7/8] Building and deploying frontend..." -ForegroundColor Yellow
 Write-Host "      (Retrieving API endpoint and Cognito config, building React app, deploying to S3 + CloudFront)" -ForegroundColor Gray
 $apiUrl = aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text --no-cli-pager
 $userPoolId = aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text --no-cli-pager
