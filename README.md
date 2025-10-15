@@ -1,6 +1,6 @@
 # Amazon Bedrock AgentCore - Automated Full-Stack Deployment
 
-Production-ready starter template for deploying AI agents with [Amazon Bedrock AgentCore](https://aws.amazon.com/bedrock/agentcore/resources/). Complete infrastructure scaffolding with authentication, API, and web interface - all automated in one command.
+Starter template for deploying AI agents with [Amazon Bedrock AgentCore](https://aws.amazon.com/bedrock/agentcore/resources/). Complete infrastructure scaffolding with authentication, API, and web interface - all automated in one command.
 
 The example agent is built with the [Strands Agents framework](https://github.com/strands-agents/) and includes calculator and weather tools to demonstrate tool integration. The focus is on deployment automation - you can easily swap the agent implementation or extend its capabilities.
 
