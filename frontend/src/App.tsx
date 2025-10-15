@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import AppLayout from '@cloudscape-design/components/app-layout';
+import TopNavigation from '@cloudscape-design/components/top-navigation';
 import ContentLayout from '@cloudscape-design/components/content-layout';
-import Header from '@cloudscape-design/components/header';
 import Container from '@cloudscape-design/components/container';
 import SpaceBetween from '@cloudscape-design/components/space-between';
 import Box from '@cloudscape-design/components/box';
-import Button from '@cloudscape-design/components/button';
 import ButtonGroup from '@cloudscape-design/components/button-group';
 import Grid from '@cloudscape-design/components/grid';
 import StatusIndicator from '@cloudscape-design/components/status-indicator';
@@ -259,19 +258,45 @@ function App() {
 
   if (checkingAuth) {
     return (
-      <AppLayout
-        navigationHide={true}
-        toolsHide={true}
-        disableContentPaddings
-        contentType="default"
-        content={
-          <ContentLayout defaultPadding>
-            <Box textAlign="center" padding="xxl">
-              Loading...
-            </Box>
-          </ContentLayout>
-        }
-      />
+      <>
+        <TopNavigation
+          identity={{
+            href: "#",
+            title: "Amazon Bedrock AgentCore Demo"
+          }}
+          utilities={[
+            {
+              type: "button",
+              text: user ? `${user.email} | Sign Out` : "Sign In",
+              iconName: user ? "user-profile" : "lock-private",
+              onClick: () => {
+                if (user) {
+                  handleSignOut();
+                } else {
+                  setShowAuthModal(true);
+                }
+              }
+            }
+          ]}
+          i18nStrings={{
+            overflowMenuTriggerText: "More",
+            overflowMenuTitleText: "All"
+          }}
+        />
+        <AppLayout
+          navigationHide={true}
+          toolsHide={true}
+          disableContentPaddings
+          contentType="default"
+          content={
+            <ContentLayout defaultPadding>
+              <Box textAlign="center" padding="xxl">
+                Loading...
+              </Box>
+            </ContentLayout>
+          }
+        />
+      </>
     );
   }
 
@@ -282,45 +307,37 @@ function App() {
         onDismiss={() => setShowAuthModal(false)}
         onSuccess={handleAuthSuccess}
       />
+      <TopNavigation
+        identity={{
+          href: "#",
+          title: "Amazon Bedrock AgentCore Demo"
+        }}
+        utilities={[
+          {
+            type: "button",
+            text: user ? `${user.email} | Sign Out` : "Sign In",
+            iconName: user ? "user-profile" : "lock-private",
+            onClick: () => {
+              if (user) {
+                handleSignOut();
+              } else {
+                setShowAuthModal(true);
+              }
+            }
+          }
+        ]}
+        i18nStrings={{
+          overflowMenuTriggerText: "More",
+          overflowMenuTitleText: "All"
+        }}
+      />
       <AppLayout
         navigationHide={true}
         toolsHide={true}
         disableContentPaddings
         contentType="default"
         content={
-          <ContentLayout
-            defaultPadding
-            header={
-              <Header
-                variant="h1"
-                actions={
-                  user ? (
-                    <SpaceBetween direction="horizontal" size="xs">
-                      <Box variant="p">
-                        {user.email}
-                      </Box>
-                      <Button
-                        onClick={handleSignOut}
-                        iconName="user-profile-active"
-                      >
-                        Sign Out
-                      </Button>
-                    </SpaceBetween>
-                  ) : (
-                    <Button
-                      variant="primary"
-                      onClick={() => setShowAuthModal(true)}
-                      iconName="user-profile"
-                    >
-                      Sign In
-                    </Button>
-                  )
-                }
-              >
-                Amazon Bedrock AgentCore Demo
-              </Header>
-            }
-          >
+          <ContentLayout defaultPadding>
             <Grid
               gridDefinition={[
                 { colspan: { default: 12, xs: 1, s: 2 } },
