@@ -164,25 +164,27 @@ The `deploy-all.ps1` script orchestrates the complete deployment:
 1. **Verify AWS credentials** (checks AWS CLI configuration)
 2. **Install CDK dependencies** (cdk/node_modules)
 3. **Install frontend dependencies** (frontend/node_modules, includes amazon-cognito-identity-js)
-4. **Deploy AgentCoreInfra** - Creates build pipeline resources:
+4. **Create placeholder frontend build** (for initial deployment)
+5. **Bootstrap CDK environment** (sets up CDK deployment resources in your AWS account/region)
+6. **Deploy AgentCoreInfra** - Creates build pipeline resources:
    - ECR repository for agent container images
    - IAM role for AgentCore runtime
    - S3 bucket for CodeBuild sources
    - CodeBuild project for ARM64 builds
-5. **Deploy AgentCoreAuth** - Creates authentication resources:
+7. **Deploy AgentCoreAuth** - Creates authentication resources:
    - Cognito User Pool (email/password)
    - User Pool Client for frontend
    - Password policy (min 8 chars, uppercase, lowercase, digit)
-6. **Create placeholder frontend build** (for initial deployment)
-7. **Deploy AgentCoreRuntime** - Deploys agent and API:
+8. **Deploy AgentCoreRuntime** - Deploys agent and API:
    - Uploads agent source code to S3
    - Triggers CodeBuild via Custom Resource
    - **Lambda waiter polls CodeBuild** (5-10 minutes)
    - Creates AgentCore runtime with built image
    - Creates Lambda invoker function
    - Creates API Gateway with Cognito authorizer
-8. **Build frontend with API URL and Cognito config** (from stack outputs)
-9. **Deploy AgentCoreFrontend** - Deploys web interface:
+9. **Build frontend with API URL and Cognito config, then deploy AgentCoreFrontend**:
+   - Retrieves API endpoint and Cognito config from stack outputs
+   - Builds React app with injected configuration
    - S3 bucket for static hosting
    - CloudFront distribution with OAC
    - Deploys React app with authentication UI
@@ -247,26 +249,32 @@ The execution role includes:
 
 If you prefer to deploy stacks individually:
 
-### 1. Deploy Infrastructure
+### 1. Bootstrap CDK (one-time setup)
+```bash
+cd cdk
+npx cdk bootstrap --no-cli-pager
+```
+
+### 2. Deploy Infrastructure
 ```bash
 cd cdk
 npx cdk deploy AgentCoreInfra --no-cli-pager
 ```
 
-### 2. Deploy Authentication
+### 3. Deploy Authentication
 ```bash
 cd cdk
 npx cdk deploy AgentCoreAuth --no-cli-pager
 ```
 
-### 3. Deploy Runtime (triggers build automatically)
+### 4. Deploy Runtime (triggers build automatically)
 ```bash
 cd cdk
 npx cdk deploy AgentCoreRuntime --no-cli-pager
 ```
 *Note: This will pause for 5-10 minutes while CodeBuild runs*
 
-### 4. Deploy Frontend
+### 5. Deploy Frontend
 
 **Windows (PowerShell):**
 ```powershell
@@ -318,6 +326,24 @@ npx cdk destroy AgentCoreInfra --no-cli-pager
 **Note:** Cognito User Pool will be deleted along with all user accounts.
 
 ## Troubleshooting
+
+### "CDK Bootstrap Required" or "SSM parameter not found"
+If you see errors like "Has the environment been bootstrapped? Please run 'cdk bootstrap'":
+
+This means CDK hasn't been set up in your AWS account/region yet. The deployment script now handles this automatically, but if you're doing manual deployment:
+
+```bash
+cd cdk
+npx cdk bootstrap --no-cli-pager
+```
+
+**Region-specific bootstrap**: CDK bootstrap is required once per AWS account/region combination. If you're deploying to a different region than `us-east-1` (the default), set the region first:
+
+```bash
+export CDK_DEFAULT_REGION=eu-west-3  # or your preferred region
+cd cdk
+npx cdk bootstrap --no-cli-pager
+```
 
 ### "Access Denied" or "Unauthorized"
 If AWS credentials are not configured or have expired:

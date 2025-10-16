@@ -7,7 +7,7 @@ set -e  # Exit on error
 echo -e "\033[0;36m=== AgentCore Demo Deployment ===\033[0m"
 
 # Step 1: Verify AWS credentials
-echo -e "\n\033[0;33m[1/8] Verifying AWS credentials...\033[0m"
+echo -e "\n\033[0;33m[1/9] Verifying AWS credentials...\033[0m"
 echo -e "\033[0;90m      (Checking AWS CLI configuration and validating access)\033[0m"
 
 # Check if AWS credentials are configured
@@ -28,7 +28,7 @@ echo -e "\033[0;32m      Authenticated as: $ARN\033[0m"
 echo -e "\033[0;32m      AWS Account: $ACCOUNT_ID\033[0m"
 
 # Step 2: Install CDK dependencies
-echo -e "\n\033[0;33m[2/8] Installing CDK dependencies...\033[0m"
+echo -e "\n\033[0;33m[2/9] Installing CDK dependencies...\033[0m"
 echo -e "\033[0;90m      (Installing AWS CDK libraries and TypeScript packages for infrastructure code)\033[0m"
 if [ ! -d "cdk/node_modules" ]; then
     pushd cdk > /dev/null
@@ -39,7 +39,7 @@ else
 fi
 
 # Step 3: Install frontend dependencies
-echo -e "\n\033[0;33m[3/8] Installing frontend dependencies...\033[0m"
+echo -e "\n\033[0;33m[3/9] Installing frontend dependencies...\033[0m"
 echo -e "\033[0;90m      (Installing React, Vite, Cognito SDK, and UI component libraries)\033[0m"
 pushd frontend > /dev/null
 # Commented out to save time during development - uncomment for clean builds
@@ -50,9 +50,9 @@ pushd frontend > /dev/null
 npm install
 popd > /dev/null
 
-# Step 3.5: Create placeholder dist BEFORE any CDK commands
+# Step 4: Create placeholder dist BEFORE any CDK commands
 # (CDK synthesizes all stacks even when deploying one, so frontend/dist must exist)
-echo -e "\n\033[0;33m[3.5/8] Creating placeholder frontend build...\033[0m"
+echo -e "\n\033[0;33m[4/9] Creating placeholder frontend build...\033[0m"
 echo -e "\033[0;90m      (Generating temporary HTML file - required for CDK synthesis)\033[0m"
 if [ ! -d "frontend/dist" ]; then
     mkdir -p frontend/dist
@@ -61,22 +61,29 @@ else
     echo -e "\033[0;90m      Placeholder already exists, skipping...\033[0m"
 fi
 
-# Step 4: Deploy infrastructure stack
-echo -e "\n\033[0;33m[4/8] Deploying infrastructure stack...\033[0m"
+# Step 5: Bootstrap CDK (if needed)
+echo -e "\n\033[0;33m[5/9] Bootstrapping CDK environment...\033[0m"
+echo -e "\033[0;90m      (Setting up CDK deployment resources in your AWS account/region)\033[0m"
+pushd cdk > /dev/null
+npx cdk bootstrap --no-cli-pager
+popd > /dev/null
+
+# Step 6: Deploy infrastructure stack
+echo -e "\n\033[0;33m[6/9] Deploying infrastructure stack...\033[0m"
 echo -e "\033[0;90m      (Creating ECR repository, CodeBuild project, S3 bucket, and IAM roles)\033[0m"
 pushd cdk > /dev/null
 npx cdk deploy AgentCoreInfra --no-cli-pager --require-approval never
 popd > /dev/null
 
-# Step 5: Deploy auth stack
-echo -e "\n\033[0;33m[5/8] Deploying authentication stack...\033[0m"
+# Step 7: Deploy auth stack
+echo -e "\n\033[0;33m[7/9] Deploying authentication stack...\033[0m"
 echo -e "\033[0;90m      (Creating Cognito User Pool with email verification and password policies)\033[0m"
 pushd cdk > /dev/null
 npx cdk deploy AgentCoreAuth --no-cli-pager --require-approval never
 popd > /dev/null
 
-# Step 6: Deploy backend stack (triggers build and waits via Lambda)
-echo -e "\n\033[0;33m[6/8] Deploying AgentCore backend stack...\033[0m"
+# Step 8: Deploy backend stack (triggers build and waits via Lambda)
+echo -e "\n\033[0;33m[8/9] Deploying AgentCore backend stack...\033[0m"
 echo -e "\033[0;90m      (Uploading agent code, building ARM64 Docker image, creating AgentCore runtime, Lambda, and API Gateway)\033[0m"
 echo -e "\033[0;90m      Note: CodeBuild will compile the container image - this takes 5-10 minutes\033[0m"
 echo -e "\033[0;90m      The deployment will pause while waiting for the build to complete...\033[0m"
@@ -84,8 +91,8 @@ pushd cdk > /dev/null
 npx cdk deploy AgentCoreRuntime --no-cli-pager --require-approval never
 popd > /dev/null
 
-# Step 7: Get API URL and Cognito config, then build/deploy frontend
-echo -e "\n\033[0;33m[7/8] Building and deploying frontend...\033[0m"
+# Step 9: Get API URL and Cognito config, then build/deploy frontend
+echo -e "\n\033[0;33m[9/9] Building and deploying frontend...\033[0m"
 echo -e "\033[0;90m      (Retrieving API endpoint and Cognito config, building React app, deploying to S3 + CloudFront)\033[0m"
 API_URL=$(aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text --no-cli-pager)
 USER_POOL_ID=$(aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text --no-cli-pager)
