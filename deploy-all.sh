@@ -88,7 +88,26 @@ echo -e "\033[0;90m      (Uploading agent code, building ARM64 Docker image, cre
 echo -e "\033[0;90m      Note: CodeBuild will compile the container image - this takes 5-10 minutes\033[0m"
 echo -e "\033[0;90m      The deployment will pause while waiting for the build to complete...\033[0m"
 pushd cdk > /dev/null
-npx cdk deploy AgentCoreRuntime --no-cli-pager --require-approval never
+if ! npx cdk deploy AgentCoreRuntime --no-cli-pager --require-approval never 2>&1 | tee /tmp/agentcore-deploy.log; then
+    # Check if the error is about unrecognized resource type
+    if grep -q "Unrecognized resource types.*BedrockAgentCore" /tmp/agentcore-deploy.log; then
+        CURRENT_REGION="${AWS_DEFAULT_REGION:-${AWS_REGION:-unknown}}"
+        echo -e "\n\033[0;31m❌ DEPLOYMENT FAILED: AgentCore is not available in region '$CURRENT_REGION'\033[0m"
+        echo -e ""
+        echo -e "\033[0;33mPlease verify AgentCore availability in your target region:\033[0m"
+        echo -e "\033[0;36mhttps://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agentcore-regions.html\033[0m"
+        echo -e ""
+        echo -e "\033[0;33mTo deploy to a supported region, set the AWS_DEFAULT_REGION environment variable:\033[0m"
+        echo -e "\033[0;90m  export AWS_DEFAULT_REGION=\"your-supported-region\"\033[0m"
+        echo -e "\033[0;90m  export AWS_REGION=\"your-supported-region\"\033[0m"
+        echo -e "\033[0;90m  ./deploy-all.sh\033[0m"
+        popd > /dev/null
+        exit 1
+    fi
+    # Re-throw other errors
+    popd > /dev/null
+    exit 1
+fi
 popd > /dev/null
 
 # Step 9: Get API URL and Cognito config, then build/deploy frontend

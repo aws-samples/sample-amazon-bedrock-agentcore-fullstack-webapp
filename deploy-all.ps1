@@ -101,10 +101,25 @@ Write-Host "      (Uploading agent code, building ARM64 Docker image, creating A
 Write-Host "      Note: CodeBuild will compile the container image - this takes 5-10 minutes" -ForegroundColor DarkGray
 Write-Host "      The deployment will pause while waiting for the build to complete..." -ForegroundColor DarkGray
 Push-Location cdk
-npx cdk deploy AgentCoreRuntime --no-cli-pager --require-approval never
+$deployOutput = npx cdk deploy AgentCoreRuntime --no-cli-pager --require-approval never 2>&1 | Tee-Object -Variable cdkOutput
 Pop-Location
 
 if ($LASTEXITCODE -ne 0) {
+    # Check if the error is about unrecognized resource type
+    if ($cdkOutput -match "Unrecognized resource types.*BedrockAgentCore") {
+        $currentRegion = if ($env:AWS_DEFAULT_REGION) { $env:AWS_DEFAULT_REGION } elseif ($env:AWS_REGION) { $env:AWS_REGION } else { "unknown" }
+        Write-Host "`n❌ DEPLOYMENT FAILED: AgentCore is not available in region '$currentRegion'" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "Please verify AgentCore availability in your target region:" -ForegroundColor Yellow
+        Write-Host "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agentcore-regions.html" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host "To deploy to a supported region, set the AWS_DEFAULT_REGION environment variable:" -ForegroundColor Yellow
+        Write-Host '  $env:AWS_DEFAULT_REGION = "your-supported-region"' -ForegroundColor Gray
+        Write-Host '  $env:AWS_REGION = "your-supported-region"' -ForegroundColor Gray
+        Write-Host "  .\deploy-all.ps1" -ForegroundColor Gray
+        exit 1
+    }
+    # Re-throw other errors
     Write-Host "Backend deployment failed" -ForegroundColor Red
     exit 1
 }

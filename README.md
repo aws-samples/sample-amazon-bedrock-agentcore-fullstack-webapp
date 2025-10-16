@@ -15,6 +15,12 @@ The example agent is built with the [Strands Agents framework](https://github.co
   - Environment variables: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
 - **No Docker required!** (CodeBuild handles container builds)
 
+### ⚠️ Important: Region Requirements
+
+**Amazon Bedrock AgentCore is only available in specific AWS regions.**
+
+Before deploying, verify AgentCore availability in your target region by checking the [AWS AgentCore Regions Documentation](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agentcore-regions.html).
+
 ### One-Command Deploy
 
 **Windows (PowerShell):**
@@ -327,6 +333,29 @@ npx cdk destroy AgentCoreInfra --no-cli-pager
 
 ## Troubleshooting
 
+### ❌ "Template format error: Unrecognized resource types: [AWS::BedrockAgentCore::Runtime]"
+
+**This is the most common deployment error.** It means you're trying to deploy to a region where AgentCore is not available.
+
+**Solution:**
+
+1. **Check current regional availability** - Visit [AWS AgentCore Regions Documentation](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agentcore-regions.html)
+2. **Set the region environment variables** to a supported region before deploying:
+
+**Windows (PowerShell):**
+```powershell
+$env:AWS_DEFAULT_REGION = "your-supported-region"
+$env:AWS_REGION = "your-supported-region"
+.\deploy-all.ps1
+```
+
+**macOS/Linux (Bash):**
+```bash
+export AWS_DEFAULT_REGION="your-supported-region"
+export AWS_REGION="your-supported-region"
+./deploy-all.sh
+```
+
 ### "CDK Bootstrap Required" or "SSM parameter not found"
 If you see errors like "Has the environment been bootstrapped? Please run 'cdk bootstrap'":
 
@@ -337,13 +366,7 @@ cd cdk
 npx cdk bootstrap --no-cli-pager
 ```
 
-**Region-specific bootstrap**: CDK bootstrap is required once per AWS account/region combination. If you're deploying to a different region than `us-east-1` (the default), set the region first:
-
-```bash
-export CDK_DEFAULT_REGION=eu-west-3  # or your preferred region
-cd cdk
-npx cdk bootstrap --no-cli-pager
-```
+**Region-specific bootstrap**: CDK bootstrap is required once per AWS account/region combination.
 
 ### "Access Denied" or "Unauthorized"
 If AWS credentials are not configured or have expired:
@@ -363,7 +386,7 @@ export AWS_PROFILE=<profile-name>
 ```bash
 export AWS_ACCESS_KEY_ID=your-access-key
 export AWS_SECRET_ACCESS_KEY=your-secret-key
-export AWS_DEFAULT_REGION=us-east-1
+export AWS_DEFAULT_REGION=your-region
 ```
 
 **Verify credentials are working:**
@@ -460,7 +483,7 @@ AgentCore natively supports ARM64 architecture, providing better performance and
 
 ## Cost Estimate
 
-Approximate monthly costs (us-east-1):
+Approximate monthly costs:
 - **Cognito**: Free for first 50,000 MAUs (Monthly Active Users)
 - **AgentCore Runtime**: $0.10 per hour active + $0.000008 per request
 - **Lambda**: Free tier covers most demos
