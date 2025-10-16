@@ -238,10 +238,16 @@ async function sendResponse(event, status, data, reason) {
     // DEFAULT endpoint is automatically created by AgentCore
 
     // Lambda function to invoke the agent
+    // Deploy from lambda/invoke-agent directory which includes:
+    // - dist/index.js (compiled TypeScript)
+    // - node_modules/ (runtime dependencies)
+    // - package.json (dependency manifest)
     const invokeAgentLambda = new lambda.Function(this, 'InvokeAgentLambda', {
       runtime: lambda.Runtime.NODEJS_22_X,
-      handler: 'index.handler',
-      code: lambda.Code.fromAsset('../lambda/invoke-agent'),
+      handler: 'dist/index.handler',
+      code: lambda.Code.fromAsset('../lambda/invoke-agent', {
+        exclude: ['*.ts', 'tsconfig.json', '*.d.ts'],
+      }),
       timeout: cdk.Duration.seconds(300), // 5 minutes for agent processing
       memorySize: 512,
       environment: {

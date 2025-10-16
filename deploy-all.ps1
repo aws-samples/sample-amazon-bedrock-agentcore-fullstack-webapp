@@ -48,9 +48,26 @@ Push-Location frontend
 npm install
 Pop-Location
 
-# Step 4: Create placeholder dist BEFORE any CDK commands
+# Step 4: Build Lambda function
+Write-Host "`n[4/10] Building Lambda function..." -ForegroundColor Yellow
+Write-Host "      (Installing dependencies and compiling TypeScript to JavaScript)" -ForegroundColor Gray
+Push-Location lambda/invoke-agent
+if (-not (Test-Path "node_modules")) {
+    npm install
+} else {
+    Write-Host "      Lambda dependencies already installed, skipping..." -ForegroundColor Gray
+}
+npm run build
+Pop-Location
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Lambda build failed" -ForegroundColor Red
+    exit 1
+}
+
+# Step 5: Create placeholder dist BEFORE any CDK commands
 # (CDK synthesizes all stacks even when deploying one, so frontend/dist must exist)
-Write-Host "`n[4/9] Creating placeholder frontend build..." -ForegroundColor Yellow
+Write-Host "`n[5/10] Creating placeholder frontend build..." -ForegroundColor Yellow
 Write-Host "      (Generating temporary HTML file - required for CDK synthesis)" -ForegroundColor Gray
 if (-not (Test-Path "frontend/dist")) {
     New-Item -ItemType Directory -Path "frontend/dist" -Force | Out-Null
@@ -59,11 +76,12 @@ if (-not (Test-Path "frontend/dist")) {
     Write-Host "      Placeholder already exists, skipping..." -ForegroundColor Gray
 }
 
-# Step 5: Bootstrap CDK (if needed)
-Write-Host "`n[5/9] Bootstrapping CDK environment..." -ForegroundColor Yellow
+# Step 6: Bootstrap CDK (if needed)
+Write-Host "`n[6/10] Bootstrapping CDK environment..." -ForegroundColor Yellow
 Write-Host "      (Setting up CDK deployment resources in your AWS account/region)" -ForegroundColor Gray
 Push-Location cdk
-npx cdk bootstrap --no-cli-pager
+$timestamp = Get-Date -Format "yyyyMMddHHmmss"
+npx cdk bootstrap --output "cdk.out.$timestamp" --no-cli-pager
 Pop-Location
 
 if ($LASTEXITCODE -ne 0) {
@@ -71,11 +89,12 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Step 6: Deploy infrastructure stack
-Write-Host "`n[6/9] Deploying infrastructure stack..." -ForegroundColor Yellow
+# Step 7: Deploy infrastructure stack
+Write-Host "`n[7/10] Deploying infrastructure stack..." -ForegroundColor Yellow
 Write-Host "      (Creating ECR repository, CodeBuild project, S3 bucket, and IAM roles)" -ForegroundColor Gray
 Push-Location cdk
-npx cdk deploy AgentCoreInfra --no-cli-pager --require-approval never
+$timestamp = Get-Date -Format "yyyyMMddHHmmss"
+npx cdk deploy AgentCoreInfra --output "cdk.out.$timestamp" --no-cli-pager --require-approval never
 Pop-Location
 
 if ($LASTEXITCODE -ne 0) {
@@ -83,11 +102,12 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Step 7: Deploy auth stack
-Write-Host "`n[7/9] Deploying authentication stack..." -ForegroundColor Yellow
+# Step 8: Deploy auth stack
+Write-Host "`n[8/10] Deploying authentication stack..." -ForegroundColor Yellow
 Write-Host "      (Creating Cognito User Pool with email verification and password policies)" -ForegroundColor Gray
 Push-Location cdk
-npx cdk deploy AgentCoreAuth --no-cli-pager --require-approval never
+$timestamp = Get-Date -Format "yyyyMMddHHmmss"
+npx cdk deploy AgentCoreAuth --output "cdk.out.$timestamp" --no-cli-pager --require-approval never
 Pop-Location
 
 if ($LASTEXITCODE -ne 0) {
@@ -95,13 +115,14 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Step 8: Deploy backend stack (triggers build and waits via Lambda)
-Write-Host "`n[8/9] Deploying AgentCore backend stack..." -ForegroundColor Yellow
+# Step 9: Deploy backend stack (triggers build and waits via Lambda)
+Write-Host "`n[9/10] Deploying AgentCore backend stack..." -ForegroundColor Yellow
 Write-Host "      (Uploading agent code, building ARM64 Docker image, creating AgentCore runtime, Lambda, and API Gateway)" -ForegroundColor Gray
 Write-Host "      Note: CodeBuild will compile the container image - this takes 5-10 minutes" -ForegroundColor DarkGray
 Write-Host "      The deployment will pause while waiting for the build to complete..." -ForegroundColor DarkGray
 Push-Location cdk
-$deployOutput = npx cdk deploy AgentCoreRuntime --no-cli-pager --require-approval never 2>&1 | Tee-Object -Variable cdkOutput
+$timestamp = Get-Date -Format "yyyyMMddHHmmss"
+$deployOutput = npx cdk deploy AgentCoreRuntime --output "cdk.out.$timestamp" --no-cli-pager --require-approval never 2>&1 | Tee-Object -Variable cdkOutput
 Pop-Location
 
 if ($LASTEXITCODE -ne 0) {
@@ -124,8 +145,8 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Step 9: Get API URL and Cognito config, then build/deploy frontend
-Write-Host "`n[9/9] Building and deploying frontend..." -ForegroundColor Yellow
+# Step 10: Get API URL and Cognito config, then build/deploy frontend
+Write-Host "`n[10/10] Building and deploying frontend..." -ForegroundColor Yellow
 Write-Host "      (Retrieving API endpoint and Cognito config, building React app, deploying to S3 + CloudFront)" -ForegroundColor Gray
 $apiUrl = aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text --no-cli-pager
 $userPoolId = aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text --no-cli-pager
@@ -155,7 +176,8 @@ if ($LASTEXITCODE -ne 0) {
 
 # Deploy frontend stack
 Push-Location cdk
-npx cdk deploy AgentCoreFrontend --no-cli-pager --require-approval never
+$timestamp = Get-Date -Format "yyyyMMddHHmmss"
+npx cdk deploy AgentCoreFrontend --output "cdk.out.$timestamp" --no-cli-pager --require-approval never
 Pop-Location
 
 if ($LASTEXITCODE -ne 0) {

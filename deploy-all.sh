@@ -50,9 +50,21 @@ pushd frontend > /dev/null
 npm install
 popd > /dev/null
 
-# Step 4: Create placeholder dist BEFORE any CDK commands
+# Step 4: Build Lambda function
+echo -e "\n\033[0;33m[4/10] Building Lambda function...\033[0m"
+echo -e "\033[0;90m      (Installing dependencies and compiling TypeScript to JavaScript)\033[0m"
+pushd lambda/invoke-agent > /dev/null
+if [ ! -d "node_modules" ]; then
+    npm install
+else
+    echo -e "\033[0;90m      Lambda dependencies already installed, skipping...\033[0m"
+fi
+npm run build
+popd > /dev/null
+
+# Step 5: Create placeholder dist BEFORE any CDK commands
 # (CDK synthesizes all stacks even when deploying one, so frontend/dist must exist)
-echo -e "\n\033[0;33m[4/9] Creating placeholder frontend build...\033[0m"
+echo -e "\n\033[0;33m[5/10] Creating placeholder frontend build...\033[0m"
 echo -e "\033[0;90m      (Generating temporary HTML file - required for CDK synthesis)\033[0m"
 if [ ! -d "frontend/dist" ]; then
     mkdir -p frontend/dist
@@ -61,34 +73,38 @@ else
     echo -e "\033[0;90m      Placeholder already exists, skipping...\033[0m"
 fi
 
-# Step 5: Bootstrap CDK (if needed)
-echo -e "\n\033[0;33m[5/9] Bootstrapping CDK environment...\033[0m"
+# Step 6: Bootstrap CDK (if needed)
+echo -e "\n\033[0;33m[6/10] Bootstrapping CDK environment...\033[0m"
 echo -e "\033[0;90m      (Setting up CDK deployment resources in your AWS account/region)\033[0m"
 pushd cdk > /dev/null
-npx cdk bootstrap --no-cli-pager
+TIMESTAMP=$(date +%Y%m%d%H%M%S)
+npx cdk bootstrap --output "cdk.out.$TIMESTAMP" --no-cli-pager
 popd > /dev/null
 
-# Step 6: Deploy infrastructure stack
-echo -e "\n\033[0;33m[6/9] Deploying infrastructure stack...\033[0m"
+# Step 7: Deploy infrastructure stack
+echo -e "\n\033[0;33m[7/10] Deploying infrastructure stack...\033[0m"
 echo -e "\033[0;90m      (Creating ECR repository, CodeBuild project, S3 bucket, and IAM roles)\033[0m"
 pushd cdk > /dev/null
-npx cdk deploy AgentCoreInfra --no-cli-pager --require-approval never
+TIMESTAMP=$(date +%Y%m%d%H%M%S)
+npx cdk deploy AgentCoreInfra --output "cdk.out.$TIMESTAMP" --no-cli-pager --require-approval never
 popd > /dev/null
 
-# Step 7: Deploy auth stack
-echo -e "\n\033[0;33m[7/9] Deploying authentication stack...\033[0m"
+# Step 8: Deploy auth stack
+echo -e "\n\033[0;33m[8/10] Deploying authentication stack...\033[0m"
 echo -e "\033[0;90m      (Creating Cognito User Pool with email verification and password policies)\033[0m"
 pushd cdk > /dev/null
-npx cdk deploy AgentCoreAuth --no-cli-pager --require-approval never
+TIMESTAMP=$(date +%Y%m%d%H%M%S)
+npx cdk deploy AgentCoreAuth --output "cdk.out.$TIMESTAMP" --no-cli-pager --require-approval never
 popd > /dev/null
 
-# Step 8: Deploy backend stack (triggers build and waits via Lambda)
-echo -e "\n\033[0;33m[8/9] Deploying AgentCore backend stack...\033[0m"
+# Step 9: Deploy backend stack (triggers build and waits via Lambda)
+echo -e "\n\033[0;33m[9/10] Deploying AgentCore backend stack...\033[0m"
 echo -e "\033[0;90m      (Uploading agent code, building ARM64 Docker image, creating AgentCore runtime, Lambda, and API Gateway)\033[0m"
 echo -e "\033[0;90m      Note: CodeBuild will compile the container image - this takes 5-10 minutes\033[0m"
 echo -e "\033[0;90m      The deployment will pause while waiting for the build to complete...\033[0m"
 pushd cdk > /dev/null
-if ! npx cdk deploy AgentCoreRuntime --no-cli-pager --require-approval never 2>&1 | tee /tmp/agentcore-deploy.log; then
+TIMESTAMP=$(date +%Y%m%d%H%M%S)
+if ! npx cdk deploy AgentCoreRuntime --output "cdk.out.$TIMESTAMP" --no-cli-pager --require-approval never 2>&1 | tee /tmp/agentcore-deploy.log; then
     # Check if the error is about unrecognized resource type
     if grep -q "Unrecognized resource types.*BedrockAgentCore" /tmp/agentcore-deploy.log; then
         CURRENT_REGION="${AWS_DEFAULT_REGION:-${AWS_REGION:-unknown}}"
@@ -110,8 +126,8 @@ if ! npx cdk deploy AgentCoreRuntime --no-cli-pager --require-approval never 2>&
 fi
 popd > /dev/null
 
-# Step 9: Get API URL and Cognito config, then build/deploy frontend
-echo -e "\n\033[0;33m[9/9] Building and deploying frontend...\033[0m"
+# Step 10: Get API URL and Cognito config, then build/deploy frontend
+echo -e "\n\033[0;33m[10/10] Building and deploying frontend...\033[0m"
 echo -e "\033[0;90m      (Retrieving API endpoint and Cognito config, building React app, deploying to S3 + CloudFront)\033[0m"
 API_URL=$(aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text --no-cli-pager)
 USER_POOL_ID=$(aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text --no-cli-pager)
@@ -136,7 +152,8 @@ echo -e "\033[0;32mUser Pool Client ID: $USER_POOL_CLIENT_ID\033[0m"
 
 # Deploy frontend stack
 pushd cdk > /dev/null
-npx cdk deploy AgentCoreFrontend --no-cli-pager --require-approval never
+TIMESTAMP=$(date +%Y%m%d%H%M%S)
+npx cdk deploy AgentCoreFrontend --output "cdk.out.$TIMESTAMP" --no-cli-pager --require-approval never
 popd > /dev/null
 
 # Get CloudFront URL
