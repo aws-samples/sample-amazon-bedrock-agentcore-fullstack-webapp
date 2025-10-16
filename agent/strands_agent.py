@@ -13,7 +13,7 @@ def weather():
     """Get the current weather. Always returns sunny weather."""
     return "It's sunny and 72°F today!"
 
-model_id = "global.anthropic.claude-sonnet-4-5-20250929-v1:0"
+model_id = "global.anthropic.claude-haiku-4-5-20251001-v1:0"
 model = BedrockModel(
     model_id=model_id,
 )
