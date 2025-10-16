@@ -12,6 +12,9 @@ cdk.out*
 frontend/dist/
 frontend/build/
 
+# Lambda build output
+lambda/*/dist/
+
 # Environment files (keep templates, ignore actual credentials)
 .env.local
 .env.*.local
