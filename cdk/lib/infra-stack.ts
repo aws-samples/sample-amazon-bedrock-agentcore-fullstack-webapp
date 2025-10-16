@@ -111,16 +111,20 @@ export class AgentCoreInfraStack extends cdk.Stack {
       ],
     }));
 
-    // Bedrock Model Invocation
+    // Bedrock Model Invocation (including Converse API and Inference Profiles)
     agentRole.addToPolicy(new iam.PolicyStatement({
       sid: 'BedrockModelInvocation',
       effect: iam.Effect.ALLOW,
       actions: [
         'bedrock:InvokeModel',
         'bedrock:InvokeModelWithResponseStream',
+        'bedrock:Converse',
+        'bedrock:ConverseStream',
       ],
       resources: [
         'arn:aws:bedrock:*::foundation-model/*',
+        `arn:aws:bedrock:${this.region}:${this.account}:inference-profile/*`,
+        `arn:aws:bedrock:*:${this.account}:inference-profile/*`,
         `arn:aws:bedrock:${this.region}:${this.account}:*`,
       ],
     }));
