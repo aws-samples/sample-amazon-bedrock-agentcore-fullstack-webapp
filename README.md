@@ -7,7 +7,9 @@ The example agent is built with the [Strands Agents framework](https://github.co
 ## Quick Start
 
 ### Prerequisites
-- **AWS CLI** installed and configured ([Installation Guide](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html))
+- **AWS CLI v2.31.13 or later** installed and configured ([Installation Guide](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html))
+  - Check your version: `aws --version`
+  - AgentCore support was added in AWS CLI v2.31.13 (January 2025)
 - **Node.js 22+** installed
 - **AWS credentials** configured with permissions for CloudFormation, Lambda, S3, ECR, CodeBuild, API Gateway, Cognito, and IAM via:
   - `aws configure` (access key/secret key)
@@ -55,7 +57,7 @@ chmod +x deploy-all.sh scripts/build-frontend.sh
    - Enter the code to confirm
 4. You'll be automatically signed in
 5. Enter a prompt: "What is 42 + 58?"
-6. See the response from Claude Sonnet!
+6. See the response from the agent
 
 Try these prompts:
 - "What's the weather like today?"
@@ -168,32 +170,35 @@ project-root/
 The `deploy-all.ps1` script orchestrates the complete deployment:
 
 1. **Verify AWS credentials** (checks AWS CLI configuration)
-2. **Install CDK dependencies** (cdk/node_modules)
-3. **Install frontend dependencies** (frontend/node_modules, includes amazon-cognito-identity-js)
-4. **Create placeholder frontend build** (for initial deployment)
-5. **Bootstrap CDK environment** (sets up CDK deployment resources in your AWS account/region)
-6. **Deploy AgentCoreInfra** - Creates build pipeline resources:
+2. **Check AWS CLI version** (requires v2.31.13+ for AgentCore support)
+3. **Check AgentCore availability** (verifies service is available in your configured region)
+4. **Install CDK dependencies** (cdk/node_modules)
+5. **Install frontend dependencies** (frontend/node_modules, includes amazon-cognito-identity-js)
+6. **Build Lambda function** (compiles TypeScript to JavaScript)
+7. **Create placeholder frontend build** (for initial deployment)
+8. **Bootstrap CDK environment** (sets up CDK deployment resources in your AWS account/region)
+9. **Deploy AgentCoreInfra** - Creates build pipeline resources:
    - ECR repository for agent container images
    - IAM role for AgentCore runtime
    - S3 bucket for CodeBuild sources
    - CodeBuild project for ARM64 builds
-7. **Deploy AgentCoreAuth** - Creates authentication resources:
-   - Cognito User Pool (email/password)
-   - User Pool Client for frontend
-   - Password policy (min 8 chars, uppercase, lowercase, digit)
-8. **Deploy AgentCoreRuntime** - Deploys agent and API:
-   - Uploads agent source code to S3
-   - Triggers CodeBuild via Custom Resource
-   - **Lambda waiter polls CodeBuild** (5-10 minutes)
-   - Creates AgentCore runtime with built image
-   - Creates Lambda invoker function
-   - Creates API Gateway with Cognito authorizer
-9. **Build frontend with API URL and Cognito config, then deploy AgentCoreFrontend**:
-   - Retrieves API endpoint and Cognito config from stack outputs
-   - Builds React app with injected configuration
-   - S3 bucket for static hosting
-   - CloudFront distribution with OAC
-   - Deploys React app with authentication UI
+10. **Deploy AgentCoreAuth** - Creates authentication resources:
+    - Cognito User Pool (email/password)
+    - User Pool Client for frontend
+    - Password policy (min 8 chars, uppercase, lowercase, digit)
+11. **Deploy AgentCoreRuntime** - Deploys agent and API:
+    - Uploads agent source code to S3
+    - Triggers CodeBuild via Custom Resource
+    - **Lambda waiter polls CodeBuild** (5-10 minutes)
+    - Creates AgentCore runtime with built image
+    - Creates Lambda invoker function
+    - Creates API Gateway with Cognito authorizer
+12. **Build frontend with API URL and Cognito config, then deploy AgentCoreFrontend**:
+    - Retrieves API endpoint and Cognito config from stack outputs
+    - Builds React app with injected configuration
+    - S3 bucket for static hosting
+    - CloudFront distribution with OAC
+    - Deploys React app with authentication UI
 
 ### Request Flow
 
@@ -204,7 +209,7 @@ The `deploy-all.ps1` script orchestrates the complete deployment:
 5. API Gateway validates JWT token with Cognito
 6. Lambda invokes AgentCore Runtime
 7. AgentCore executes agent in isolated container (microVM)
-8. Agent processes request using Strands framework + Anthropic Claude Sonnet 4.5
+8. Agent processes request using Strands framework + Anthropic Claude Haiku 4.5
 9. Response returned through Lambda to frontend
 
 ## Key Components
@@ -219,7 +224,7 @@ The `deploy-all.ps1` script orchestrates the complete deployment:
 
 ### 2. Agent (`agent/strands_agent.py`)
 - Built with Strands Agents framework
-- Uses Anthropic Claude Sonnet 4.5
+- Uses Anthropic Claude Haiku 4.5
 - Includes calculator and weather tools
 - Wrapped with `@BedrockAgentCoreApp` decorator
 
@@ -486,14 +491,21 @@ AgentCore natively supports ARM64 architecture, providing better performance and
 Approximate monthly costs:
 - **Cognito**: Free for first 50,000 MAUs (Monthly Active Users)
 - **AgentCore Runtime**: $0.10 per hour active + $0.000008 per request
-- **Lambda**: Free tier covers most demos
+- **Bedrock Model Usage**: Pay-per-token (varies by model, ~$0.003 per 1K input tokens for Claude Sonnet)
+- **Lambda**: Free tier covers most demos ($0.20 per 1M requests after free tier)
 - **API Gateway**: $3.50 per million requests
 - **CloudFront**: $0.085 per GB + $0.01 per 10,000 requests
-- **S3**: Negligible for static hosting
-- **ECR**: $0.10 per GB-month
-- **CodeBuild**: $0.005 per build minute (ARM64)
+- **S3**: $0.023 per GB-month (negligible for static hosting)
+- **ECR**: $0.10 per GB-month for container image storage
+- **CodeBuild**: $0.005 per build minute (ARM64) - only during deployments
+- **CloudWatch Logs**: $0.50 per GB ingested + $0.03 per GB stored
+- **CloudFormation**: Free for stack operations
+- **IAM**: Free
 
-**Typical demo cost**: < $5/month with light usage (Cognito is free for small user bases)
+**Typical demo cost**: $5-15/month with light usage
+- AgentCore runtime (~$7/month if active 1 hour/day)
+- Bedrock model calls (~$1-5/month depending on usage)
+- Other services mostly covered by free tiers
 
 ## Customizing the UI
 
