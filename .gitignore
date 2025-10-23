@@ -1,0 +1,81 @@
+*.js
+!jest.config.js
+*.d.ts
+node_modules
+package-lock.json
+
+# CDK asset staging directory
+.cdk.staging
+cdk.out*
+
+# Frontend build output
+frontend/dist/
+frontend/build/
+
+# Lambda build output
+lambda/*/dist/
+
+# Environment files (keep templates, ignore actual credentials)
+.env.local
+.env.*.local
+!.env.example
+!.env.production
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Docker
+.dockerignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.kiro/
+
+# Security scanning
+.ash/
+scan-report.json
+
+# Steering docs (environment-specific)
+.kiro/steering/design-best-practices.md
+.kiro/steering/aws-credentials.md
+.kiro/steering/windows-environment.md
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# AWS
+.aws-sam/
+samconfig.toml
+
+# Coverage reports
+coverage/
+.nyc_output/
+*.lcov
