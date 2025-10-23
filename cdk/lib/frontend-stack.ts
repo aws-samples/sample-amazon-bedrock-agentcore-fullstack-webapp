@@ -7,9 +7,10 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 
 interface FrontendStackProps extends cdk.StackProps {
-  apiUrl: string;
   userPoolId: string;
   userPoolClientId: string;
+  agentRuntimeArn: string;
+  region: string;
 }
 
 export class FrontendStack extends cdk.Stack {
@@ -87,6 +88,16 @@ export class FrontendStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'UserPoolClientId', {
       value: props.userPoolClientId,
       description: 'Cognito User Pool Client ID',
+    });
+
+    new cdk.CfnOutput(this, 'AgentRuntimeArn', {
+      value: props.agentRuntimeArn,
+      description: 'AgentCore Runtime ARN',
+    });
+
+    new cdk.CfnOutput(this, 'Region', {
+      value: props.region,
+      description: 'AWS Region',
     });
   }
 }

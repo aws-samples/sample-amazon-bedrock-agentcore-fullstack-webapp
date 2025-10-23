@@ -2,21 +2,20 @@ import * as cdk from 'aws-cdk-lib';
 import * as bedrockagentcore from 'aws-cdk-lib/aws-bedrockagentcore';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import * as cr from 'aws-cdk-lib/custom-resources';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { Construct } from 'constructs';
 
 export interface AgentCoreStackProps extends cdk.StackProps {
   userPool: cognito.IUserPool;
+  userPoolClient: cognito.IUserPoolClient;
 }
 
 export class AgentCoreStack extends cdk.Stack {
   public readonly agentRuntimeArn: string;
-  public readonly apiUrl: string;
 
   constructor(scope: Construct, id: string, props: AgentCoreStackProps) {
     super(scope, id, props);
@@ -45,6 +44,10 @@ export class AgentCoreStack extends cdk.Stack {
       'AgentRuntimeRole',
       cdk.Fn.importValue('AgentCoreRuntimeRoleArn')
     );
+
+    // Get Cognito discovery URL for inbound auth
+    const region = cdk.Stack.of(this).region;
+    const discoveryUrl = `https://cognito-idp.${region}.amazonaws.com/${props.userPool.userPoolId}/.well-known/openid-configuration`;
 
     // Step 1: Upload agent source code to S3
     // BucketDeployment extracts files to the destination prefix
@@ -199,10 +202,10 @@ async function sendResponse(event, status, data, reason) {
 
     buildWaiter.node.addDependency(buildTrigger);
 
-    // Create the AgentCore Runtime
+    // Create the AgentCore Runtime with inbound auth
     const agentRuntime = new bedrockagentcore.CfnRuntime(this, 'AgentRuntime', {
       agentRuntimeName: 'strands_agent',
-      description: 'AgentCore runtime using Strands Agents framework',
+      description: 'AgentCore runtime using Strands Agents framework with Cognito authentication',
       roleArn: agentRole.roleArn,
 
       // Container configuration
@@ -220,6 +223,14 @@ async function sendResponse(event, status, data, reason) {
       // Protocol configuration
       protocolConfiguration: 'HTTP',
 
+      // Inbound authentication configuration
+      authorizerConfiguration: {
+        customJwtAuthorizer: {
+          discoveryUrl: discoveryUrl,
+          allowedClients: [props.userPoolClient.userPoolClientId],
+        },
+      },
+
       // Environment variables (if needed)
       environmentVariables: {
         LOG_LEVEL: 'INFO',
@@ -235,101 +246,31 @@ async function sendResponse(event, status, data, reason) {
     // Ensure AgentCore runtime is created after build completes
     agentRuntime.node.addDependency(buildWaiter);
 
-    // DEFAULT endpoint is automatically created by AgentCore
-
-    // Lambda function to invoke the agent
-    // Deploy from lambda/invoke-agent directory which includes:
-    // - dist/index.js (compiled TypeScript)
-    // - node_modules/ (runtime dependencies)
-    // - package.json (dependency manifest)
-    const invokeAgentLambda = new lambda.Function(this, 'InvokeAgentLambda', {
-      runtime: lambda.Runtime.NODEJS_22_X,
-      handler: 'dist/index.handler',
-      code: lambda.Code.fromAsset('../lambda/invoke-agent', {
-        exclude: ['*.ts', 'tsconfig.json', '*.d.ts'],
-      }),
-      timeout: cdk.Duration.seconds(300), // 5 minutes for agent processing
-      memorySize: 512,
-      environment: {
-        AGENT_RUNTIME_ARN: agentRuntime.attrAgentRuntimeArn,
-        AGENT_ENDPOINT_NAME: 'DEFAULT'
-      },
-    });
-
-    // Grant Lambda permission to invoke AgentCore
-    invokeAgentLambda.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ['bedrock-agentcore:InvokeAgentRuntime'],
-      resources: ['*'],  // AgentCore requires wildcard for InvokeAgentRuntime
-    }));
-
-    // API Gateway REST API
-    const api = new apigateway.RestApi(this, 'AgentApi', {
-      restApiName: 'AgentCore Demo API',
-      description: 'REST API for AgentCore runtime invocation',
-      defaultCorsPreflightOptions: {
-        allowOrigins: apigateway.Cors.ALL_ORIGINS,
-        allowMethods: apigateway.Cors.ALL_METHODS,
-        allowHeaders: ['Content-Type', 'Authorization'],
-      },
-    });
-
-    // Cognito authorizer
-    const authorizer = new apigateway.CognitoUserPoolsAuthorizer(this, 'CognitoAuthorizer', {
-      cognitoUserPools: [props.userPool],
-      authorizerName: 'AgentCoreAuthorizer',
-    });
-
-    const invokeResource = api.root.addResource('invoke');
-    invokeResource.addMethod('POST', new apigateway.LambdaIntegration(invokeAgentLambda), {
-      authorizer,
-      authorizationType: apigateway.AuthorizationType.COGNITO,
-    });
-
-    // Add CORS headers to gateway responses (for errors like 504)
-    api.addGatewayResponse('Default4xx', {
-      type: apigateway.ResponseType.DEFAULT_4XX,
-      responseHeaders: {
-        'Access-Control-Allow-Origin': "'*'",
-        'Access-Control-Allow-Headers': "'Content-Type,Authorization'",
-      },
-    });
-
-    api.addGatewayResponse('Default5xx', {
-      type: apigateway.ResponseType.DEFAULT_5XX,
-      responseHeaders: {
-        'Access-Control-Allow-Origin': "'*'",
-        'Access-Control-Allow-Headers': "'Content-Type,Authorization'",
-      },
-    });
+    // Store runtime info for frontend
+    this.agentRuntimeArn = agentRuntime.attrAgentRuntimeArn;
 
 
 
-    new cdk.CfnOutput(this, 'AgentRuntimeId', {
-      value: agentRuntime.attrAgentRuntimeId,
-      description: 'AgentCore Runtime ID',
-    });
+
 
     new cdk.CfnOutput(this, 'AgentRuntimeArn', {
       value: agentRuntime.attrAgentRuntimeArn,
       description: 'AgentCore Runtime ARN',
+      exportName: 'AgentCoreRuntimeArn',
     });
 
     new cdk.CfnOutput(this, 'EndpointName', {
       value: 'DEFAULT',
       description: 'Runtime Endpoint Name (DEFAULT auto-created)',
+      exportName: 'AgentCoreEndpointName',
     });
 
-    new cdk.CfnOutput(this, 'ApiUrl', {
-      value: api.url,
-      description: 'API Gateway URL for invoking the agent',
+    new cdk.CfnOutput(this, 'Region', {
+      value: region,
+      description: 'AWS Region for AgentCore Runtime',
+      exportName: 'AgentCoreRegion',
     });
 
-    new cdk.CfnOutput(this, 'InvokeEndpoint', {
-      value: `${api.url}invoke`,
-      description: 'Full endpoint URL to invoke the agent',
-    });
 
-    this.apiUrl = api.url;
   }
 }

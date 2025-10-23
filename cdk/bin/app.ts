@@ -33,7 +33,8 @@ const agentStack = new AgentCoreStack(app, 'AgentCoreRuntime', {
     region: process.env.CDK_DEFAULT_REGION || 'us-east-1',
   },
   userPool: authStack.userPool,
-  description: 'AgentCore Runtime: Container-based agent with API Gateway integration',
+  userPoolClient: authStack.userPoolClient,
+  description: 'AgentCore Runtime: Container-based agent with built-in Cognito authentication',
 });
 
 // Frontend stack (depends on runtime and auth stacks)
@@ -42,10 +43,11 @@ new FrontendStack(app, 'AgentCoreFrontend', {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION || 'us-east-1',
   },
-  apiUrl: agentStack.apiUrl,
   userPoolId: authStack.userPool.userPoolId,
   userPoolClientId: authStack.userPoolClient.userPoolClientId,
-  description: 'AgentCore Frontend: CloudFront-hosted React interface',
+  agentRuntimeArn: agentStack.agentRuntimeArn,
+  region: process.env.CDK_DEFAULT_REGION || 'us-east-1',
+  description: 'AgentCore Frontend: CloudFront-hosted React interface with direct AgentCore integration',
 });
 
 app.synth();

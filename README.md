@@ -46,6 +46,8 @@ chmod +x deploy-all.sh scripts/build-frontend.sh
 
 **Done!** Your app is live at the CloudFront URL shown in the output.
 
+> **Architecture Note**: This demo uses a simple architecture where the React frontend calls AgentCore directly with JWT authentication.
+
 ### Test Your App
 
 1. Open the CloudFront URL from deployment output
@@ -67,48 +69,43 @@ Try these prompts:
 ## Architecture
 
 ```
-┌─────────────┐
-│   Browser   │
-└──────┬──────┘
-       │ HTTPS
-       ▼
-┌─────────────────┐
-│   CloudFront    │
-└──────┬──────────┘
+┌─────────────┐    1. Load Static Assets    ┌─────────────────┐
+│   Browser   │ ──────────────────────────> │   CloudFront    │
+└──────┬──────┘                             └──────┬──────────┘
+       │                                           │
+       │                                           ▼
+       │                                    ┌─────────────────┐
+       │                                    │   React App     │
+       │                                    │   (S3 Bucket)   │
+       │                                    │   + Auth UI     │
+       │                                    └─────────────────┘
        │
+       │ 2. Sign In/Sign Up
        ▼
 ┌─────────────────┐
-│   React App     │
-│   (S3 Bucket)   │
-│   + Auth UI     │
-└──────┬──────────┘
-       │ POST /invoke
-       │ + JWT Token
-       ▼
-┌─────────────────┐
-│  API Gateway    │
-│  + Cognito Auth │
-└──────┬──────────┘
-       │
-       ▼
-┌─────────────────┐
-│  Lambda         │
-│  (Invoker)      │
-└──────┬──────────┘
-       │ InvokeAgentRuntime
+│ Cognito         │
+│ User Pool       │ ──── JWT Token ────┐
+│ (Auth)          │                    │
+└─────────────────┘                    │
+                                       │
+       ┌───────────────────────────────┘
+       │ 3. POST /runtimes/{arn}/invocations
+       │    Authorization: Bearer {JWT}
        ▼
 ┌─────────────────┐
 │ AgentCore       │
 │ Runtime         │
 │ (ARM64 Docker)  │
-│ Bedrock LLM     │
+│ + Built-in      │
+│ Cognito Auth    │
+│ + Bedrock LLM   │
 └─────────────────┘
 
-┌─────────────────┐
-│ Cognito         │
-│ User Pool       │
-│ (Auth)          │
-└─────────────────┘
+Flow:
+1. Browser loads React app from CloudFront/S3
+2. User authenticates with Cognito, receives JWT token
+3. Browser calls AgentCore directly with JWT Bearer token
+4. AgentCore validates JWT and processes agent requests
 ```
 
 ## Stack Architecture
@@ -117,7 +114,7 @@ Try these prompts:
 |------------|---------|---------------|
 | **AgentCoreInfra** | Build infrastructure | ECR Repository, CodeBuild Project, IAM Roles, S3 Bucket |
 | **AgentCoreAuth** | Authentication | Cognito User Pool, User Pool Client |
-| **AgentCoreRuntime** | Agent runtime & API | AgentCore Runtime, Lambda Waiter, Lambda Invoker, API Gateway + Cognito Authorizer |
+| **AgentCoreRuntime** | Agent runtime with built-in auth | AgentCore Runtime with Cognito JWT Authorizer, Lambda Waiter |
 | **AgentCoreFrontend** | Web UI | S3 Bucket, CloudFront Distribution, React App with Auth |
 
 ## Project Structure
@@ -141,22 +138,20 @@ project-root/
 │   ├── tsconfig.json          # TypeScript configuration
 │   └── package.json           # CDK dependencies
 │
-├── lambda/                     # Lambda functions
-│   └── invoke-agent/
-│       └── index.ts           # Agent invocation handler
-│
+
 ├── frontend/                   # React app (Vite)
 │   ├── src/
 │   │   ├── App.tsx            # Main UI component with auth
 │   │   ├── AuthModal.tsx      # Login/signup modal
 │   │   ├── auth.ts            # Cognito authentication logic
+│   │   ├── agentcore.ts       # Direct AgentCore invocation
 │   │   └── main.tsx           # React entry point
 │   ├── dist/                  # Build output (gitignored)
 │   └── package.json           # Frontend dependencies
 │
 ├── scripts/
-│   ├── build-frontend.ps1     # Builds React app with API URL injection (Windows)
-│   └── build-frontend.sh      # Builds React app with API URL injection (macOS/Linux)
+│   ├── build-frontend.ps1     # Builds React app with AgentCore ARN injection (Windows)
+│   └── build-frontend.sh      # Builds React app with AgentCore ARN injection (macOS/Linux)
 │
 ├── deploy-all.ps1             # Main deployment orchestration (Windows)
 ├── deploy-all.sh              # Main deployment orchestration (macOS/Linux)
@@ -174,27 +169,24 @@ The `deploy-all.ps1` script orchestrates the complete deployment:
 3. **Check AgentCore availability** (verifies service is available in your configured region)
 4. **Install CDK dependencies** (cdk/node_modules)
 5. **Install frontend dependencies** (frontend/node_modules, includes amazon-cognito-identity-js)
-6. **Build Lambda function** (compiles TypeScript to JavaScript)
-7. **Create placeholder frontend build** (for initial deployment)
-8. **Bootstrap CDK environment** (sets up CDK deployment resources in your AWS account/region)
-9. **Deploy AgentCoreInfra** - Creates build pipeline resources:
+6. **Create placeholder frontend build** (for initial deployment)
+7. **Bootstrap CDK environment** (sets up CDK deployment resources in your AWS account/region)
+8. **Deploy AgentCoreInfra** - Creates build pipeline resources:
    - ECR repository for agent container images
    - IAM role for AgentCore runtime
    - S3 bucket for CodeBuild sources
    - CodeBuild project for ARM64 builds
-10. **Deploy AgentCoreAuth** - Creates authentication resources:
+9. **Deploy AgentCoreAuth** - Creates authentication resources:
     - Cognito User Pool (email/password)
     - User Pool Client for frontend
     - Password policy (min 8 chars, uppercase, lowercase, digit)
-11. **Deploy AgentCoreRuntime** - Deploys agent and API:
+10. **Deploy AgentCoreRuntime** - Deploys agent with built-in auth:
     - Uploads agent source code to S3
     - Triggers CodeBuild via Custom Resource
     - **Lambda waiter polls CodeBuild** (5-10 minutes)
-    - Creates AgentCore runtime with built image
-    - Creates Lambda invoker function
-    - Creates API Gateway with Cognito authorizer
-12. **Build frontend with API URL and Cognito config, then deploy AgentCoreFrontend**:
-    - Retrieves API endpoint and Cognito config from stack outputs
+    - Creates AgentCore runtime with built-in Cognito JWT authentication
+11. **Build frontend with AgentCore ARN and Cognito config, then deploy AgentCoreFrontend**:
+    - Retrieves AgentCore Runtime ARN and Cognito config from stack outputs
     - Builds React app with injected configuration
     - S3 bucket for static hosting
     - CloudFront distribution with OAC
@@ -203,14 +195,13 @@ The `deploy-all.ps1` script orchestrates the complete deployment:
 ### Request Flow
 
 1. User signs in via Cognito (email verification required)
-2. Frontend receives JWT token from Cognito
+2. Frontend receives JWT access token from Cognito
 3. User enters prompt in React UI
-4. Frontend sends POST to API Gateway `/invoke` with JWT token in Authorization header
-5. API Gateway validates JWT token with Cognito
-6. Lambda invokes AgentCore Runtime
-7. AgentCore executes agent in isolated container (microVM)
-8. Agent processes request using Strands framework + Anthropic Claude Haiku 4.5
-9. Response returned through Lambda to frontend
+4. Frontend sends POST directly to AgentCore `/runtimes/{arn}/invocations` with JWT Bearer token
+5. AgentCore validates JWT token with Cognito (built-in authentication)
+6. AgentCore executes agent in isolated container (microVM)
+7. Agent processes request using Strands framework + Anthropic Claude Haiku 4.5
+8. Response returned directly to frontend
 
 ## Key Components
 
@@ -221,6 +212,7 @@ The `deploy-all.ps1` script orchestrates the complete deployment:
 - **Frontend integration** via amazon-cognito-identity-js
 - JWT tokens automatically included in API requests
 - Sign in/sign up modal with email confirmation flow
+- **JWT Bearer Token Authentication**: Implements AgentCore's built-in JWT authorization (see [JWT Authentication Guide](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-oauth.html#invoke-agent))
 
 ### 2. Agent (`agent/strands_agent.py`)
 - Built with Strands Agents framework
@@ -242,7 +234,13 @@ The `deploy-all.ps1` script orchestrates the complete deployment:
 - Ensures image exists before AgentCore runtime creation
 - **Why needed:** CodeBuild's `batchGetBuilds` response exceeds CloudFormation's 4KB Custom Resource limit
 
-### 5. IAM Permissions
+### 5. Direct AgentCore Integration
+- Frontend calls AgentCore directly using HTTPS
+- JWT Bearer token authentication (Cognito access tokens)
+- Built-in Cognito JWT authorizer in AgentCore runtime
+- Session ID generation for request tracking
+
+### 6. IAM Permissions
 The execution role includes:
 - Bedrock model invocation
 - ECR image access
@@ -250,7 +248,7 @@ The execution role includes:
 - X-Ray tracing
 - AgentCore Identity (workload access tokens)
 
-### 6. Built-in Observability
+### 7. Built-in Observability
 - **CloudWatch Logs:** `/aws/bedrock-agentcore/runtimes/strands_agent-*`
 - **X-Ray Tracing:** Distributed tracing enabled
 - **CloudWatch Metrics:** Custom metrics in `bedrock-agentcore` namespace
@@ -289,20 +287,22 @@ npx cdk deploy AgentCoreRuntime --no-cli-pager
 
 **Windows (PowerShell):**
 ```powershell
-$apiUrl = aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text --no-cli-pager
+$agentRuntimeArn = aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='AgentRuntimeArn'].OutputValue" --output text --no-cli-pager
+$region = aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='Region'].OutputValue" --output text --no-cli-pager
 $userPoolId = aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text --no-cli-pager
 $userPoolClientId = aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolClientId'].OutputValue" --output text --no-cli-pager
-.\scripts\build-frontend.ps1 -ApiUrl $apiUrl -UserPoolId $userPoolId -UserPoolClientId $userPoolClientId
+.\scripts\build-frontend.ps1 -UserPoolId $userPoolId -UserPoolClientId $userPoolClientId -AgentRuntimeArn $agentRuntimeArn -Region $region
 cd cdk
 npx cdk deploy AgentCoreFrontend --no-cli-pager
 ```
 
 **macOS/Linux (Bash):**
 ```bash
-API_URL=$(aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text --no-cli-pager)
+AGENT_RUNTIME_ARN=$(aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='AgentRuntimeArn'].OutputValue" --output text --no-cli-pager)
+REGION=$(aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='Region'].OutputValue" --output text --no-cli-pager)
 USER_POOL_ID=$(aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text --no-cli-pager)
 USER_POOL_CLIENT_ID=$(aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolClientId'].OutputValue" --output text --no-cli-pager)
-./scripts/build-frontend.sh "$API_URL" "$USER_POOL_ID" "$USER_POOL_CLIENT_ID"
+./scripts/build-frontend.sh "$USER_POOL_ID" "$USER_POOL_CLIENT_ID" "$AGENT_RUNTIME_ARN" "$REGION"
 cd cdk
 npx cdk deploy AgentCoreFrontend --no-cli-pager
 ```
@@ -427,9 +427,10 @@ aws logs tail /aws/codebuild/bedrock-agentcore-strands-agent-builder --follow --
 ```
 
 ### Frontend shows errors
-Verify API URL and Cognito config are correct:
+Verify AgentCore Runtime ARN and Cognito config are correct:
 ```bash
-aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text --no-cli-pager
+aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='AgentRuntimeArn'].OutputValue" --output text --no-cli-pager
+aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='Region'].OutputValue" --output text --no-cli-pager
 aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text --no-cli-pager
 aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolClientId'].OutputValue" --output text --no-cli-pager
 ```
@@ -451,20 +452,54 @@ aws cloudformation describe-stacks --stack-name AgentCoreFrontend --query "Stack
 
 ## Architecture Details
 
+### CDK vs AgentCore CLI
+
+This project uses AWS CDK to replicate the functionality of the AgentCore CLI's `agentcore launch` command. Here's how they compare:
+
+**AgentCore CLI Approach:**
+```bash
+# Simple CLI commands handle everything
+agentcore configure -e agent.py
+agentcore launch
+```
+
+**Our CDK Approach:**
+```bash
+# Infrastructure as Code with same end result
+./deploy-all.ps1  # or ./deploy-all.sh
+```
+
+**Why CDK Instead of CLI?**
+- **Full-stack deployment**: Includes authentication, frontend, and infrastructure
+- **Reproducible infrastructure**: Version-controlled, declarative infrastructure
+- **Team collaboration**: Shared infrastructure definitions
+- **Integration flexibility**: Easy to extend with additional AWS services
+- **Production readiness**: Proper IAM roles, security groups, and resource tagging
+
+Both approaches create the same AgentCore runtime, but CDK provides more control over the complete application stack.
+
 ### Why Lambda Waiter?
-CloudFormation Custom Resources have a 4KB response limit. CodeBuild's `batchGetBuilds` response exceeds this. The Lambda waiter polls CodeBuild internally and returns only success/failure to CloudFormation.
+The AgentCore CLI's `agentcore launch` command waits for container builds to complete before creating the runtime. Our CDK implementation replicates this synchronous behavior using a Lambda Custom Resource:
+
+- **Replicates CLI synchronization**: Simulates how `agentcore launch` waits for build completion
+- **CloudFormation limitation**: Custom Resources have a 4KB response limit, but CodeBuild's `batchGetBuilds` response exceeds this
+- **Internal polling**: Lambda waiter polls CodeBuild internally and returns only success/failure to CloudFormation
+- **Ensures proper sequencing**: Prevents AgentCore runtime creation before container image exists (same as CLI)
 
 ### Why CodeBuild?
-- Native ARM64 build environment (no emulation)
-- Consistent builds across team members
-- No local Docker Desktop required
-- Build history and logs in AWS Console
-- Automatic image push to ECR
+AgentCore CLI's `agentcore launch` command automatically handles container building and ECR pushing. Our CDK implementation replicates this functionality using CodeBuild to provide the same automated container build process:
+
+- **Replicates CLI behavior**: Simulates `agentcore launch` container build process
+- **Native ARM64 build environment** (no emulation, matches AgentCore CLI)
+- **Consistent builds across team members** (no local Docker Desktop required)
+- **Build history and logs in AWS Console** (same as CLI provides)
+- **Automatic image push to ECR** (matches CLI workflow)
+- **Infrastructure as Code**: Declarative alternative to CLI commands
 
 ### Why Four Stacks?
 - **AgentCoreInfra**: Rarely changes, contains build pipeline
 - **AgentCoreAuth**: Authentication resources, rarely changes
-- **AgentCoreRuntime**: Changes when agent code updates
+- **AgentCoreRuntime**: Changes when agent code updates, includes built-in Cognito authentication
 - **AgentCoreFrontend**: Changes when UI updates
 
 This separation allows independent updates without rebuilding everything.
@@ -609,6 +644,7 @@ Cloudscape uses design tokens. Create `frontend/src/theme.css`:
 ## Resources
 
 - [AgentCore Documentation](https://docs.aws.amazon.com/bedrock/latest/userguide/agents-agentcore.html)
+- **[JWT Bearer Token Authentication Guide](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-oauth.html#invoke-agent)** - Key documentation for understanding AgentCore's built-in JWT authentication
 - [Strands Agents Documentation](https://github.com/awslabs/strands)
 - [CDK API Reference](https://docs.aws.amazon.com/cdk/api/v2/)
 - [Bedrock Model IDs](https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html)

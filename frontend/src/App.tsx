@@ -17,9 +17,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import AuthModal from './AuthModal';
 import { getCurrentUser, getIdToken, signOut, AuthUser } from './auth';
+import { invokeAgent } from './agentcore';
 import './markdown.css';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 interface Message {
   type: 'user' | 'agent';
@@ -137,7 +136,7 @@ function App() {
     setShowSupportPrompts(false);
   };
 
-  const invokeAgent = async () => {
+  const handleSendMessage = async () => {
     if (!user) {
       setShowAuthModal(true);
       return;
@@ -164,25 +163,7 @@ function App() {
     setPrompt('');
 
     try {
-      const token = await getIdToken();
-      if (!token) {
-        throw new Error('Not authenticated');
-      }
-
-      const res = await fetch(`${API_URL}/invoke`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ prompt: currentPrompt })
-      });
-
-      const data = await res.json() as { response?: string; error?: string };
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to invoke agent');
-      }
+      const data = await invokeAgent({ prompt: currentPrompt });
 
       const agentMessage: Message = {
         type: 'agent',
@@ -538,7 +519,7 @@ function App() {
                       <PromptInput
                         value={prompt}
                         onChange={({ detail }) => setPrompt(detail.value)}
-                        onAction={invokeAgent}
+                        onAction={handleSendMessage}
                         placeholder="Ask a question..."
                         actionButtonAriaLabel="Send message"
                         actionButtonIconName="send"

@@ -7,7 +7,7 @@ set -e  # Exit on error
 echo -e "\033[0;36m=== AgentCore Demo Deployment ===\033[0m"
 
 # Step 1: Verify AWS credentials
-echo -e "\n\033[0;33m[1/12] Verifying AWS credentials...\033[0m"
+echo -e "\n\033[0;33m[1/10] Verifying AWS credentials...\033[0m"
 echo -e "\033[0;90m      (Checking AWS CLI configuration and validating access)\033[0m"
 
 # Check if AWS credentials are configured
@@ -28,7 +28,7 @@ echo -e "\033[0;32m      Authenticated as: $ARN\033[0m"
 echo -e "\033[0;32m      AWS Account: $ACCOUNT_ID\033[0m"
 
 # Step 2: Check AWS CLI version
-echo -e "\n\033[0;33m[2/12] Checking AWS CLI version...\033[0m"
+echo -e "\n\033[0;33m[2/10] Checking AWS CLI version...\033[0m"
 AWS_VERSION=$(aws --version 2>&1)
 if [[ $AWS_VERSION =~ aws-cli/([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
     MAJOR=${BASH_REMATCH[1]}
@@ -56,7 +56,7 @@ else
 fi
 
 # Step 3: Check AgentCore availability in current region
-echo -e "\n\033[0;33m[3/12] Checking AgentCore availability in current region...\033[0m"
+echo -e "\n\033[0;33m[3/10] Checking AgentCore availability in current region...\033[0m"
 # Detect current region from AWS CLI configuration
 CURRENT_REGION=$(aws configure get region)
 if [ -z "$CURRENT_REGION" ]; then
@@ -82,7 +82,7 @@ fi
 echo -e "\033[0;32m      ✓ AgentCore is available in $CURRENT_REGION\033[0m"
 
 # Step 4: Install CDK dependencies
-echo -e "\n\033[0;33m[4/12] Installing CDK dependencies...\033[0m"
+echo -e "\n\033[0;33m[4/10] Installing CDK dependencies...\033[0m"
 echo -e "\033[0;90m      (Installing AWS CDK libraries and TypeScript packages for infrastructure code)\033[0m"
 if [ ! -d "cdk/node_modules" ]; then
     pushd cdk > /dev/null
@@ -93,7 +93,7 @@ else
 fi
 
 # Step 5: Install frontend dependencies
-echo -e "\n\033[0;33m[5/12] Installing frontend dependencies...\033[0m"
+echo -e "\n\033[0;33m[5/10] Installing frontend dependencies...\033[0m"
 echo -e "\033[0;90m      (Installing React, Vite, Cognito SDK, and UI component libraries)\033[0m"
 pushd frontend > /dev/null
 # Commented out to save time during development - uncomment for clean builds
@@ -104,21 +104,9 @@ pushd frontend > /dev/null
 npm install
 popd > /dev/null
 
-# Step 6: Build Lambda function
-echo -e "\n\033[0;33m[6/12] Building Lambda function...\033[0m"
-echo -e "\033[0;90m      (Installing dependencies and compiling TypeScript to JavaScript)\033[0m"
-pushd lambda/invoke-agent > /dev/null
-if [ ! -d "node_modules" ]; then
-    npm install
-else
-    echo -e "\033[0;90m      Lambda dependencies already installed, skipping...\033[0m"
-fi
-npm run build
-popd > /dev/null
-
-# Step 7: Create placeholder dist BEFORE any CDK commands
+# Step 6: Create placeholder dist BEFORE any CDK commands
 # (CDK synthesizes all stacks even when deploying one, so frontend/dist must exist)
-echo -e "\n\033[0;33m[7/12] Creating placeholder frontend build...\033[0m"
+echo -e "\n\033[0;33m[6/10] Creating placeholder frontend build...\033[0m"
 echo -e "\033[0;90m      (Generating temporary HTML file - required for CDK synthesis)\033[0m"
 if [ ! -d "frontend/dist" ]; then
     mkdir -p frontend/dist
@@ -127,33 +115,33 @@ else
     echo -e "\033[0;90m      Placeholder already exists, skipping...\033[0m"
 fi
 
-# Step 8: Bootstrap CDK (if needed)
-echo -e "\n\033[0;33m[8/12] Bootstrapping CDK environment...\033[0m"
+# Step 7: Bootstrap CDK (if needed)
+echo -e "\n\033[0;33m[7/10] Bootstrapping CDK environment...\033[0m"
 echo -e "\033[0;90m      (Setting up CDK deployment resources in your AWS account/region)\033[0m"
 pushd cdk > /dev/null
 TIMESTAMP=$(date +%Y%m%d%H%M%S)
 npx cdk bootstrap --output "cdk.out.$TIMESTAMP" --no-cli-pager
 popd > /dev/null
 
-# Step 9: Deploy infrastructure stack
-echo -e "\n\033[0;33m[9/12] Deploying infrastructure stack...\033[0m"
+# Step 8: Deploy infrastructure stack
+echo -e "\n\033[0;33m[8/10] Deploying infrastructure stack...\033[0m"
 echo -e "\033[0;90m      (Creating ECR repository, CodeBuild project, S3 bucket, and IAM roles)\033[0m"
 pushd cdk > /dev/null
 TIMESTAMP=$(date +%Y%m%d%H%M%S)
 npx cdk deploy AgentCoreInfra --output "cdk.out.$TIMESTAMP" --no-cli-pager --require-approval never
 popd > /dev/null
 
-# Step 10: Deploy auth stack
-echo -e "\n\033[0;33m[10/12] Deploying authentication stack...\033[0m"
+# Step 9: Deploy auth stack
+echo -e "\n\033[0;33m[9/10] Deploying authentication stack...\033[0m"
 echo -e "\033[0;90m      (Creating Cognito User Pool with email verification and password policies)\033[0m"
 pushd cdk > /dev/null
 TIMESTAMP=$(date +%Y%m%d%H%M%S)
 npx cdk deploy AgentCoreAuth --output "cdk.out.$TIMESTAMP" --no-cli-pager --require-approval never
 popd > /dev/null
 
-# Step 11: Deploy backend stack (triggers build and waits via Lambda)
-echo -e "\n\033[0;33m[11/12] Deploying AgentCore backend stack...\033[0m"
-echo -e "\033[0;90m      (Uploading agent code, building ARM64 Docker image, creating AgentCore runtime, Lambda, and API Gateway)\033[0m"
+# Step 10: Deploy backend stack (triggers build and waits via Lambda)
+echo -e "\n\033[0;33m[10/10] Deploying AgentCore backend stack...\033[0m"
+echo -e "\033[0;90m      (Uploading agent code, building ARM64 Docker image, creating AgentCore runtime with built-in Cognito auth)\033[0m"
 echo -e "\033[0;90m      Note: CodeBuild will compile the container image - this takes 5-10 minutes\033[0m"
 echo -e "\033[0;90m      The deployment will pause while waiting for the build to complete...\033[0m"
 pushd cdk > /dev/null
@@ -180,15 +168,21 @@ if ! npx cdk deploy AgentCoreRuntime --output "cdk.out.$TIMESTAMP" --no-cli-page
 fi
 popd > /dev/null
 
-# Step 12: Get API URL and Cognito config, then build/deploy frontend
-echo -e "\n\033[0;33m[12/12] Building and deploying frontend...\033[0m"
-echo -e "\033[0;90m      (Retrieving API endpoint and Cognito config, building React app, deploying to S3 + CloudFront)\033[0m"
-API_URL=$(aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text --no-cli-pager)
+# Build and deploy frontend (after backend is complete)
+echo -e "\nBuilding and deploying frontend...\033[0m"
+echo -e "\033[0;90m      (Retrieving AgentCore Runtime ID and Cognito config, building React app, deploying to S3 + CloudFront)\033[0m"
+AGENT_RUNTIME_ARN=$(aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='AgentRuntimeArn'].OutputValue" --output text --no-cli-pager)
+REGION=$(aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='Region'].OutputValue" --output text --no-cli-pager)
 USER_POOL_ID=$(aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text --no-cli-pager)
 USER_POOL_CLIENT_ID=$(aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolClientId'].OutputValue" --output text --no-cli-pager)
 
-if [ -z "$API_URL" ]; then
-    echo -e "\033[0;31mFailed to get API URL from stack outputs\033[0m"
+if [ -z "$AGENT_RUNTIME_ARN" ]; then
+    echo -e "\033[0;31mFailed to get Agent Runtime ARN from stack outputs\033[0m"
+    exit 1
+fi
+
+if [ -z "$REGION" ]; then
+    echo -e "\033[0;31mFailed to get Region from stack outputs\033[0m"
     exit 1
 fi
 
@@ -197,12 +191,13 @@ if [ -z "$USER_POOL_ID" ] || [ -z "$USER_POOL_CLIENT_ID" ]; then
     exit 1
 fi
 
-echo -e "\033[0;32mAPI URL: $API_URL\033[0m"
+echo -e "\033[0;32mAgent Runtime ARN: $AGENT_RUNTIME_ARN\033[0m"
+echo -e "\033[0;32mRegion: $REGION\033[0m"
 echo -e "\033[0;32mUser Pool ID: $USER_POOL_ID\033[0m"
 echo -e "\033[0;32mUser Pool Client ID: $USER_POOL_CLIENT_ID\033[0m"
 
-# Build frontend with API URL and Cognito config
-./scripts/build-frontend.sh "$API_URL" "$USER_POOL_ID" "$USER_POOL_CLIENT_ID"
+# Build frontend with AgentCore Runtime ARN and Cognito config
+./scripts/build-frontend.sh "$USER_POOL_ID" "$USER_POOL_CLIENT_ID" "$AGENT_RUNTIME_ARN" "$REGION"
 
 # Deploy frontend stack
 pushd cdk > /dev/null
@@ -215,7 +210,9 @@ WEBSITE_URL=$(aws cloudformation describe-stacks --stack-name AgentCoreFrontend 
 
 echo -e "\n\033[0;32m=== Deployment Complete ===\033[0m"
 echo -e "\033[0;36mWebsite URL: $WEBSITE_URL\033[0m"
-echo -e "\033[0;36mAPI URL: $API_URL\033[0m"
+echo -e "\033[0;36mAgent Runtime ARN: $AGENT_RUNTIME_ARN\033[0m"
+echo -e "\033[0;36mRegion: $REGION\033[0m"
 echo -e "\033[0;36mUser Pool ID: $USER_POOL_ID\033[0m"
 echo -e "\033[0;36mUser Pool Client ID: $USER_POOL_CLIENT_ID\033[0m"
 echo -e "\n\033[0;33mNote: Users must sign up and log in to use the application\033[0m"
+echo -e "\033[0;32mFrontend now calls AgentCore directly with JWT authentication\033[0m"

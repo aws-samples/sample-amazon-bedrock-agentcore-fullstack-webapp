@@ -136,7 +136,29 @@ export const getIdToken = (): Promise<string | null> => {
         return;
       }
 
+      // Use ID Token for AgentCore authentication (as per AWS documentation)
       resolve(session.getIdToken().getJwtToken());
+    });
+  });
+};
+
+export const getAccessToken = (): Promise<string | null> => {
+  return new Promise((resolve) => {
+    const cognitoUser = userPool.getCurrentUser();
+
+    if (!cognitoUser) {
+      resolve(null);
+      return;
+    }
+
+    cognitoUser.getSession((err: any, session: any) => {
+      if (err || !session.isValid()) {
+        resolve(null);
+        return;
+      }
+
+      // Return the access token
+      resolve(session.getAccessToken().getJwtToken());
     });
   });
 };
