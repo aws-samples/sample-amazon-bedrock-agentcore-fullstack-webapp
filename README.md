@@ -1,8 +1,18 @@
 # Amazon Bedrock AgentCore - Automated Full-Stack Deployment
 
-Starter template for deploying AI agents with [Amazon Bedrock AgentCore](https://aws.amazon.com/bedrock/agentcore/resources/). Complete infrastructure scaffolding with authentication, API, and web interface - all automated in one command.
+Starter template for deploying AI agents with [Amazon Bedrock AgentCore](https://aws.amazon.com/bedrock/agentcore/resources/). Complete infrastructure scaffolding with authentication, API, and web interface - deployment automated in one command.
 
 The example agent is built with the [Strands Agents framework](https://github.com/strands-agents/) and includes calculator and weather tools to demonstrate tool integration. The focus is on deployment automation - you can easily swap the agent implementation or extend its capabilities.
+
+## Architecture
+
+![Architecture](./img/architecture_diagram.svg)
+
+Flow:
+1. Browser loads React app from CloudFront/S3
+2. User authenticates with Cognito, receives JWT token
+3. Browser calls AgentCore directly with JWT Bearer token
+4. AgentCore validates JWT and processes agent requests
 
 ## Quick Start
 
@@ -66,47 +76,6 @@ Try these prompts:
 - "Calculate 123 * 456"
 - "What is 2 to the power of 10?"
 
-## Architecture
-
-```
-┌─────────────┐    1. Load Static Assets    ┌─────────────────┐
-│   Browser   │ ──────────────────────────> │   CloudFront    │
-└──────┬──────┘                             └──────┬──────────┘
-       │                                           │
-       │                                           ▼
-       │                                    ┌─────────────────┐
-       │                                    │   React App     │
-       │                                    │   (S3 Bucket)   │
-       │                                    │   + Auth UI     │
-       │                                    └─────────────────┘
-       │
-       │ 2. Sign In/Sign Up
-       ▼
-┌─────────────────┐
-│ Cognito         │
-│ User Pool       │ ──── JWT Token ────┐
-│ (Auth)          │                    │
-└─────────────────┘                    │
-                                       │
-       ┌───────────────────────────────┘
-       │ 3. POST /runtimes/{arn}/invocations
-       │    Authorization: Bearer {JWT}
-       ▼
-┌─────────────────┐
-│ AgentCore       │
-│ Runtime         │
-│ (ARM64 Docker)  │
-│ + Built-in      │
-│ Cognito Auth    │
-│ + Bedrock LLM   │
-└─────────────────┘
-
-Flow:
-1. Browser loads React app from CloudFront/S3
-2. User authenticates with Cognito, receives JWT token
-3. Browser calls AgentCore directly with JWT Bearer token
-4. AgentCore validates JWT and processes agent requests
-```
 
 ## Stack Architecture
 
