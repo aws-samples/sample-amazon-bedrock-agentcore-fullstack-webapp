@@ -129,6 +129,18 @@ export class AgentCoreInfraStack extends cdk.Stack {
       ],
     }));
 
+    // AWS Marketplace permissions for Bedrock models
+    agentRole.addToPolicy(new iam.PolicyStatement({
+      sid: 'MarketplaceAccess',
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'aws-marketplace:ViewSubscriptions',
+        'aws-marketplace:Subscribe',
+        'aws-marketplace:Unsubscribe',
+      ],
+      resources: ['*'],
+    }));
+
     // Create S3 bucket for CodeBuild source
     const sourceBucket = new s3.Bucket(this, 'SourceBucket', {
       bucketName: `bedrock-agentcore-sources-${this.account}-${this.region}`,
