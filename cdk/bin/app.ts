@@ -5,6 +5,8 @@ import { AgentCoreInfraStack } from '../lib/infra-stack';
 import { AgentCoreStack } from '../lib/runtime-stack';
 import { FrontendStack } from '../lib/frontend-stack';
 import { AuthStack } from '../lib/auth-stack';
+import { MihcStack } from '../lib/mihc-stack';
+import process = require('process');
 
 const app = new cdk.App();
 
@@ -48,6 +50,15 @@ new FrontendStack(app, 'AgentCoreFrontend', {
   agentRuntimeArn: agentStack.agentRuntimeArn,
   region: process.env.CDK_DEFAULT_REGION || 'us-east-1',
   description: 'AgentCore Frontend: CloudFront-hosted React interface with direct AgentCore integration',
+});
+
+// MIHC stack (Medical Intelligent Healthcare Companion)
+new MihcStack(app, 'MihcStack', {
+  env: {
+    account: process.env.CDK_DEFAULT_ACCOUNT,
+    region: process.env.CDK_DEFAULT_REGION || 'us-east-1',
+  },
+  description: 'MIHC: Medical database, Lambda functions, and healthcare data infrastructure',
 });
 
 app.synth();
