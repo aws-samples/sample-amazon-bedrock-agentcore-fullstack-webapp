@@ -26,99 +26,7 @@ def get_database_credentials():
         logger.error(f"Error retrieving database credentials: {str(e)}")
         raise
 
-def initialize_database_tables():
-    """Initialize database tables with schema."""
-    try:
-        db_cluster_arn = os.environ.get('DB_CLUSTER_ARN')
-        secret_arn = os.environ.get('DB_SECRET_ARN')
-        database_name = os.environ.get('DB_NAME', 'medical_records')
-        
-        if not db_cluster_arn or not secret_arn:
-            return {
-                'status': 'error',
-                'message': 'Missing required environment variables (DB_CLUSTER_ARN or DB_SECRET_ARN)'
-            }
-        
-        # SQL commands to create tables
-        init_commands = [
-            # Create patients table
-            """
-            CREATE TABLE IF NOT EXISTS patients (
-                patient_id SERIAL PRIMARY KEY,
-                medical_record_number VARCHAR(20) UNIQUE NOT NULL,
-                first_name VARCHAR(100) NOT NULL,
-                last_name VARCHAR(100) NOT NULL,
-                date_of_birth DATE NOT NULL,
-                gender VARCHAR(20),
-                phone VARCHAR(20),
-                email VARCHAR(255),
-                address TEXT,
-                primary_care_physician VARCHAR(200),
-                allergies TEXT,
-                medical_conditions TEXT,
-                is_active BOOLEAN DEFAULT TRUE,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-            """,
-            
-            # Create diabetes monitoring table
-            """
-            CREATE TABLE IF NOT EXISTS diabetes_monitoring (
-                monitoring_id SERIAL PRIMARY KEY,
-                patient_id INTEGER REFERENCES patients(patient_id) ON DELETE CASCADE,
-                measurement_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                glucose_level INTEGER,
-                glucose_test_type VARCHAR(50),
-                hba1c DECIMAL(4,2),
-                insulin_dosage DECIMAL(6,2),
-                insulin_type VARCHAR(100),
-                notes TEXT
-            )
-            """,
-            
-            # Insert sample patient
-            """
-            INSERT INTO patients (
-                medical_record_number, first_name, last_name, date_of_birth, 
-                gender, phone, email, primary_care_physician, medical_conditions
-            ) VALUES 
-            (
-                'MRN001001', 'John', 'Smith', '1975-03-15', 
-                'male', '555-0101', 'john.smith@email.com', 
-                'Dr. Sarah Johnson', 'Type 2 Diabetes, Hypertension'
-            )
-            ON CONFLICT (medical_record_number) DO NOTHING
-            """
-        ]
-        
-        results = []
-        for i, sql_command in enumerate(init_commands):
-            try:
-                response = rds_data_client.execute_statement(
-                    resourceArn=db_cluster_arn,
-                    secretArn=secret_arn,
-                    database=database_name,
-                    sql=sql_command
-                )
-                results.append(f"Command {i+1}: Success")
-            except Exception as cmd_error:
-                results.append(f"Command {i+1}: Error - {str(cmd_error)}")
-        
-        return {
-            'status': 'success',
-            'message': 'Database initialization completed',
-            'results': results,
-            'tables_created': ['patients', 'diabetes_monitoring']
-        }
-        
-    except Exception as e:
-        logger.error(f"Database initialization failed: {str(e)}")
-        return {
-            'status': 'error',
-            'message': f'Database initialization failed: {str(e)}',
-            'error_type': type(e).__name__
-        }
+
 
 def list_tables():
     """List all tables in the database."""
@@ -165,85 +73,7 @@ def list_tables():
             'error_type': type(e).__name__
         }
 
-def add_sample_patients():
-    """Add additional sample patients to the database."""
-    try:
-        db_cluster_arn = os.environ.get('DB_CLUSTER_ARN')
-        secret_arn = os.environ.get('DB_SECRET_ARN')
-        database_name = os.environ.get('DB_NAME', 'medical_records')
-        
-        if not db_cluster_arn or not secret_arn:
-            return {
-                'status': 'error',
-                'message': 'Missing required environment variables'
-            }
-        
-        # Additional sample patients
-        sample_patients = [
-            """
-            INSERT INTO patients (
-                medical_record_number, first_name, last_name, date_of_birth, 
-                gender, phone, email, primary_care_physician, medical_conditions
-            ) VALUES 
-            (
-                'MRN001002', 'Maria', 'Garcia', '1982-07-22', 
-                'female', '555-0102', 'maria.garcia@email.com', 
-                'Dr. Michael Chen', 'Type 1 Diabetes'
-            )
-            ON CONFLICT (medical_record_number) DO NOTHING
-            """,
-            """
-            INSERT INTO patients (
-                medical_record_number, first_name, last_name, date_of_birth, 
-                gender, phone, email, primary_care_physician, medical_conditions
-            ) VALUES 
-            (
-                'MRN001003', 'Robert', 'Johnson', '1968-11-08', 
-                'male', '555-0103', 'robert.johnson@email.com', 
-                'Dr. Sarah Johnson', 'Hypertension, High Cholesterol'
-            )
-            ON CONFLICT (medical_record_number) DO NOTHING
-            """,
-            """
-            INSERT INTO patients (
-                medical_record_number, first_name, last_name, date_of_birth, 
-                gender, phone, email, primary_care_physician, medical_conditions
-            ) VALUES 
-            (
-                'MRN001004', 'Emily', 'Davis', '1990-05-14', 
-                'female', '555-0104', 'emily.davis@email.com', 
-                'Dr. Lisa Wong', 'Gestational Diabetes'
-            )
-            ON CONFLICT (medical_record_number) DO NOTHING
-            """
-        ]
-        
-        results = []
-        for i, sql_command in enumerate(sample_patients):
-            try:
-                response = rds_data_client.execute_statement(
-                    resourceArn=db_cluster_arn,
-                    secretArn=secret_arn,
-                    database=database_name,
-                    sql=sql_command
-                )
-                results.append(f"Patient {i+1}: Added successfully")
-            except Exception as cmd_error:
-                results.append(f"Patient {i+1}: {str(cmd_error)}")
-        
-        return {
-            'status': 'success',
-            'message': 'Sample patients added',
-            'results': results
-        }
-        
-    except Exception as e:
-        logger.error(f"Error adding sample patients: {str(e)}")
-        return {
-            'status': 'error',
-            'message': f'Error adding sample patients: {str(e)}',
-            'error_type': type(e).__name__
-        }
+
 
 def get_patients():
     """Retrieve all patients from the database."""
@@ -258,12 +88,12 @@ def get_patients():
                 'message': 'Missing required environment variables'
             }
         
-        # Query to get all patients
+        # Query to get all patients with correct field names
         response = rds_data_client.execute_statement(
             resourceArn=db_cluster_arn,
             secretArn=secret_arn,
             database=database_name,
-            sql="SELECT patient_id, medical_record_number, first_name, last_name, date_of_birth, gender, phone, email, medical_conditions FROM patients WHERE is_active = true ORDER BY last_name, first_name"
+            sql="SELECT patient_id, medical_record_number, first_name, last_name, middle_name, date_of_birth, gender, phone_primary, email, city, state FROM patients WHERE active = true ORDER BY last_name, first_name"
         )
         
         # Parse the results
@@ -271,7 +101,7 @@ def get_patients():
         if 'records' in response:
             for record in response['records']:
                 patient = {}
-                fields = ['patient_id', 'medical_record_number', 'first_name', 'last_name', 'date_of_birth', 'gender', 'phone', 'email', 'medical_conditions']
+                fields = ['patient_id', 'medical_record_number', 'first_name', 'last_name', 'middle_name', 'date_of_birth', 'gender', 'phone_primary', 'email', 'city', 'state']
                 for i, field in enumerate(fields):
                     if i < len(record):
                         value = record[i]
@@ -297,6 +127,107 @@ def get_patients():
         return {
             'status': 'error',
             'message': f'Error retrieving patients: {str(e)}',
+            'error_type': type(e).__name__
+        }
+
+def get_patient_by_id(patient_id=None, medical_record_number=None):
+    """Retrieve a specific patient by patient_id or medical_record_number."""
+    try:
+        db_cluster_arn = os.environ.get('DB_CLUSTER_ARN')
+        secret_arn = os.environ.get('DB_SECRET_ARN')
+        database_name = os.environ.get('DB_NAME', 'medical_records')
+        
+        if not db_cluster_arn or not secret_arn:
+            return {
+                'status': 'error',
+                'message': 'Missing required environment variables'
+            }
+        
+        if not patient_id and not medical_record_number:
+            return {
+                'status': 'error',
+                'message': 'Either patient_id or medical_record_number is required'
+            }
+        
+        # Build query based on provided identifier
+        if patient_id:
+            sql_query = """
+                SELECT patient_id, medical_record_number, first_name, last_name, middle_name, 
+                       date_of_birth, gender, phone_primary, phone_secondary, email,
+                       address_line1, address_line2, city, state, zip_code, country,
+                       emergency_contact_name, emergency_contact_phone, emergency_contact_relationship,
+                       insurance_provider, insurance_policy_number, insurance_group_number,
+                       active, created_at, updated_at
+                FROM patients 
+                WHERE patient_id = :patient_id::uuid AND active = true
+            """
+            parameters = [{'name': 'patient_id', 'value': {'stringValue': str(patient_id)}}]
+        else:
+            sql_query = """
+                SELECT patient_id, medical_record_number, first_name, last_name, middle_name, 
+                       date_of_birth, gender, phone_primary, phone_secondary, email,
+                       address_line1, address_line2, city, state, zip_code, country,
+                       emergency_contact_name, emergency_contact_phone, emergency_contact_relationship,
+                       insurance_provider, insurance_policy_number, insurance_group_number,
+                       active, created_at, updated_at
+                FROM patients 
+                WHERE medical_record_number = :medical_record_number AND active = true
+            """
+            parameters = [{'name': 'medical_record_number', 'value': {'stringValue': medical_record_number}}]
+        
+        # Execute query
+        response = rds_data_client.execute_statement(
+            resourceArn=db_cluster_arn,
+            secretArn=secret_arn,
+            database=database_name,
+            sql=sql_query,
+            parameters=parameters
+        )
+        
+        # Parse the results
+        if 'records' in response and len(response['records']) > 0:
+            record = response['records'][0]
+            patient = {}
+            fields = [
+                'patient_id', 'medical_record_number', 'first_name', 'last_name', 'middle_name',
+                'date_of_birth', 'gender', 'phone_primary', 'phone_secondary', 'email',
+                'address_line1', 'address_line2', 'city', 'state', 'zip_code', 'country',
+                'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relationship',
+                'insurance_provider', 'insurance_policy_number', 'insurance_group_number',
+                'active', 'created_at', 'updated_at'
+            ]
+            
+            for i, field in enumerate(fields):
+                if i < len(record):
+                    value = record[i]
+                    if 'stringValue' in value:
+                        patient[field] = value['stringValue']
+                    elif 'longValue' in value:
+                        patient[field] = value['longValue']
+                    elif 'booleanValue' in value:
+                        patient[field] = value['booleanValue']
+                    elif 'isNull' in value:
+                        patient[field] = None
+                    else:
+                        patient[field] = str(value)
+            
+            return {
+                'status': 'success',
+                'message': 'Patient retrieved successfully',
+                'patient': patient
+            }
+        else:
+            return {
+                'status': 'not_found',
+                'message': 'Patient not found',
+                'patient': None
+            }
+        
+    except Exception as e:
+        logger.error(f"Error retrieving patient: {str(e)}")
+        return {
+            'status': 'error',
+            'message': f'Error retrieving patient: {str(e)}',
             'error_type': type(e).__name__
         }
 
@@ -375,14 +306,7 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
                 'body': json.dumps(db_test_result)
             }
         
-        # Initialize database tables
-        if event.get('action') == 'init_database':
-            init_result = initialize_database_tables()
-            return {
-                'statusCode': 200 if init_result['status'] != 'error' else 500,
-                'headers': headers,
-                'body': json.dumps(init_result)
-            }
+
         
         # Get patients list
         if event.get('action') == 'get_patients':
@@ -393,14 +317,39 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
                 'body': json.dumps(patients_result)
             }
         
-        # Add more sample patients
-        if event.get('action') == 'add_sample_patients':
-            sample_result = add_sample_patients()
+        # Get specific patient by ID
+        if event.get('action') == 'get_patient_by_id':
+            patient_id = event.get('patient_id')
+            medical_record_number = event.get('medical_record_number')
+            
+            # Also check in pathParameters for API Gateway integration
+            if not patient_id and not medical_record_number:
+                path_params = event.get('pathParameters', {})
+                if path_params:
+                    patient_id = path_params.get('patient_id') or path_params.get('id')
+                    medical_record_number = path_params.get('medical_record_number') or path_params.get('mrn')
+            
+            # Also check in queryStringParameters
+            if not patient_id and not medical_record_number:
+                query_params = event.get('queryStringParameters', {})
+                if query_params:
+                    patient_id = query_params.get('patient_id') or query_params.get('id')
+                    medical_record_number = query_params.get('medical_record_number') or query_params.get('mrn')
+            
+            patient_result = get_patient_by_id(patient_id=patient_id, medical_record_number=medical_record_number)
+            status_code = 200
+            if patient_result['status'] == 'error':
+                status_code = 500
+            elif patient_result['status'] == 'not_found':
+                status_code = 404
+            
             return {
-                'statusCode': 200 if sample_result['status'] != 'error' else 500,
+                'statusCode': status_code,
                 'headers': headers,
-                'body': json.dumps(sample_result)
+                'body': json.dumps(patient_result)
             }
+        
+
         
         # List all tables in the database
         if event.get('action') == 'list_tables':
@@ -436,7 +385,7 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
             'headers': headers,
             'body': json.dumps({
                 'message': 'Database handler ready',
-                'available_actions': ['health_check', 'test_db_connection', 'init_database', 'get_patients'],
+                'available_actions': ['health_check', 'test_db_connection', 'get_patients', 'get_patient_by_id', 'list_tables'],
                 'event_keys': list(event.keys()),
                 'method': event.get('httpMethod', 'unknown'),
                 'resource': event.get('resource', 'unknown')
