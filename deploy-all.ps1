@@ -194,8 +194,10 @@ Write-Host "`nBuilding and deploying frontend..." -ForegroundColor Yellow
 Write-Host "      (Retrieving AgentCore Runtime ID and Cognito config, building React app, deploying to S3 + CloudFront)" -ForegroundColor Gray
 $agentRuntimeArn = aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='AgentRuntimeArn'].OutputValue" --output text --no-cli-pager
 $region = aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='Region'].OutputValue" --output text --no-cli-pager
+$memoryId = aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='AgentMemoryId'].OutputValue" --output text --no-cli-pager
 $userPoolId = aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text --no-cli-pager
 $userPoolClientId = aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolClientId'].OutputValue" --output text --no-cli-pager
+$identityPoolId = aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='IdentityPoolId'].OutputValue" --output text --no-cli-pager
 
 if ([string]::IsNullOrEmpty($agentRuntimeArn)) {
     Write-Host "Failed to get Agent Runtime ARN from stack outputs" -ForegroundColor Red
@@ -207,18 +209,30 @@ if ([string]::IsNullOrEmpty($region)) {
     exit 1
 }
 
+if ([string]::IsNullOrEmpty($memoryId)) {
+    Write-Host "Failed to get Memory ID from stack outputs" -ForegroundColor Red
+    exit 1
+}
+
 if ([string]::IsNullOrEmpty($userPoolId) -or [string]::IsNullOrEmpty($userPoolClientId)) {
     Write-Host "Failed to get Cognito config from stack outputs" -ForegroundColor Red
     exit 1
 }
 
+if ([string]::IsNullOrEmpty($identityPoolId)) {
+    Write-Host "Failed to get Identity Pool ID from stack outputs" -ForegroundColor Red
+    exit 1
+}
+
 Write-Host "Agent Runtime ARN: $agentRuntimeArn" -ForegroundColor Green
 Write-Host "Region: $region" -ForegroundColor Green
+Write-Host "Memory ID: $memoryId" -ForegroundColor Green
 Write-Host "User Pool ID: $userPoolId" -ForegroundColor Green
 Write-Host "User Pool Client ID: $userPoolClientId" -ForegroundColor Green
+Write-Host "Identity Pool ID: $identityPoolId" -ForegroundColor Green
 
 # Build frontend with AgentCore Runtime ARN and Cognito config
-& .\scripts\build-frontend.ps1 -UserPoolId $userPoolId -UserPoolClientId $userPoolClientId -AgentRuntimeArn $agentRuntimeArn -Region $region
+& .\scripts\build-frontend.ps1 -UserPoolId $userPoolId -UserPoolClientId $userPoolClientId -AgentRuntimeArn $agentRuntimeArn -IdentityPoolId $identityPoolId -MemoryId $memoryId -Region $region
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Frontend build failed" -ForegroundColor Red
@@ -243,7 +257,9 @@ Write-Host "`n=== Deployment Complete ===" -ForegroundColor Green
 Write-Host "Website URL: $websiteUrl" -ForegroundColor Cyan
 Write-Host "Agent Runtime ARN: $agentRuntimeArn" -ForegroundColor Cyan
 Write-Host "Region: $region" -ForegroundColor Cyan
+Write-Host "Memory ID: $memoryId" -ForegroundColor Cyan
 Write-Host "User Pool ID: $userPoolId" -ForegroundColor Cyan
 Write-Host "User Pool Client ID: $userPoolClientId" -ForegroundColor Cyan
+Write-Host "Identity Pool ID: $identityPoolId" -ForegroundColor Cyan
 Write-Host "`nNote: Users must sign up and log in to use the application" -ForegroundColor Yellow
 Write-Host "Frontend now calls AgentCore directly with JWT authentication" -ForegroundColor Green

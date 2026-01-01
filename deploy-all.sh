@@ -173,8 +173,10 @@ echo -e "\nBuilding and deploying frontend...\033[0m"
 echo -e "\033[0;90m      (Retrieving AgentCore Runtime ID and Cognito config, building React app, deploying to S3 + CloudFront)\033[0m"
 AGENT_RUNTIME_ARN=$(aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='AgentRuntimeArn'].OutputValue" --output text --no-cli-pager)
 REGION=$(aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='Region'].OutputValue" --output text --no-cli-pager)
+MEMORY_ID=$(aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='AgentMemoryId'].OutputValue" --output text --no-cli-pager)
 USER_POOL_ID=$(aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text --no-cli-pager)
 USER_POOL_CLIENT_ID=$(aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolClientId'].OutputValue" --output text --no-cli-pager)
+IDENTITY_POOL_ID=$(aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='IdentityPoolId'].OutputValue" --output text --no-cli-pager)
 
 if [ -z "$AGENT_RUNTIME_ARN" ]; then
     echo -e "\033[0;31mFailed to get Agent Runtime ARN from stack outputs\033[0m"
@@ -186,18 +188,30 @@ if [ -z "$REGION" ]; then
     exit 1
 fi
 
+if [ -z "$MEMORY_ID" ]; then
+    echo -e "\033[0;31mFailed to get Memory ID from stack outputs\033[0m"
+    exit 1
+fi
+
 if [ -z "$USER_POOL_ID" ] || [ -z "$USER_POOL_CLIENT_ID" ]; then
     echo -e "\033[0;31mFailed to get Cognito config from stack outputs\033[0m"
     exit 1
 fi
 
+if [ -z "$IDENTITY_POOL_ID" ]; then
+    echo -e "\033[0;31mFailed to get Identity Pool ID from stack outputs\033[0m"
+    exit 1
+fi
+
 echo -e "\033[0;32mAgent Runtime ARN: $AGENT_RUNTIME_ARN\033[0m"
 echo -e "\033[0;32mRegion: $REGION\033[0m"
+echo -e "\033[0;32mMemory ID: $MEMORY_ID\033[0m"
 echo -e "\033[0;32mUser Pool ID: $USER_POOL_ID\033[0m"
 echo -e "\033[0;32mUser Pool Client ID: $USER_POOL_CLIENT_ID\033[0m"
+echo -e "\033[0;32mIdentity Pool ID: $IDENTITY_POOL_ID\033[0m"
 
 # Build frontend with AgentCore Runtime ARN and Cognito config
-./scripts/build-frontend.sh "$USER_POOL_ID" "$USER_POOL_CLIENT_ID" "$AGENT_RUNTIME_ARN" "$REGION"
+./scripts/build-frontend.sh "$USER_POOL_ID" "$USER_POOL_CLIENT_ID" "$AGENT_RUNTIME_ARN" "$IDENTITY_POOL_ID" "$MEMORY_ID" "$REGION"
 
 # Deploy frontend stack
 pushd cdk > /dev/null
@@ -212,7 +226,9 @@ echo -e "\n\033[0;32m=== Deployment Complete ===\033[0m"
 echo -e "\033[0;36mWebsite URL: $WEBSITE_URL\033[0m"
 echo -e "\033[0;36mAgent Runtime ARN: $AGENT_RUNTIME_ARN\033[0m"
 echo -e "\033[0;36mRegion: $REGION\033[0m"
+echo -e "\033[0;36mMemory ID: $MEMORY_ID\033[0m"
 echo -e "\033[0;36mUser Pool ID: $USER_POOL_ID\033[0m"
 echo -e "\033[0;36mUser Pool Client ID: $USER_POOL_CLIENT_ID\033[0m"
+echo -e "\033[0;36mIdentity Pool ID: $IDENTITY_POOL_ID\033[0m"
 echo -e "\n\033[0;33mNote: Users must sign up and log in to use the application\033[0m"
 echo -e "\033[0;32mFrontend now calls AgentCore directly with JWT authentication\033[0m"
