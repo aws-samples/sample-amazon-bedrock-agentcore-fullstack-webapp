@@ -11,6 +11,10 @@ ENV UV_SYSTEM_PYTHON=1 \
     AWS_REGION=us-east-1 \
     AWS_DEFAULT_REGION=us-east-1
 
+# Install build dependencies for compiling Python packages with C extensions
+RUN apt update && \
+    apt -y --no-install-recommends install build-essential
+
 # Install dependencies (separate layer for caching)
 COPY requirements.txt .
 RUN uv pip install -r requirements.txt && \
