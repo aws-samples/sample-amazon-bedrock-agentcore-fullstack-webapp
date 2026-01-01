@@ -16,6 +16,7 @@ export interface AgentCoreStackProps extends cdk.StackProps {
 
 export class AgentCoreStack extends cdk.Stack {
   public readonly agentRuntimeArn: string;
+  public readonly memoryId: string;
 
   constructor(scope: Construct, id: string, props: AgentCoreStackProps) {
     super(scope, id, props);
@@ -48,6 +49,16 @@ export class AgentCoreStack extends cdk.Stack {
     // Get Cognito discovery URL for inbound auth
     const region = cdk.Stack.of(this).region;
     const discoveryUrl = `https://cognito-idp.${region}.amazonaws.com/${props.userPool.userPoolId}/.well-known/openid-configuration`;
+
+    // Create AgentCore Memory for short-term conversation history
+    const agentMemory = new bedrockagentcore.CfnMemory(this, 'AgentMemory', {
+      name: 'strands_agent_memory',
+      eventExpiryDuration: 365,
+      description: 'Short-term memory store for conversation history',
+    });
+
+    // Store Memory ID for exports
+    this.memoryId = agentMemory.attrMemoryId;
 
     // Step 1: Upload only the essential agent files (exclude heavy directories)
     const agentSourceUpload = new s3deploy.BucketDeployment(this, 'AgentSourceUpload', {
@@ -244,8 +255,9 @@ async function sendResponse(event, status, data, reason) {
         },
       },
 
-      // Environment variables (if needed)
+      // Environment variables
       environmentVariables: {
+        AGENTCORE_MEMORY_ID: agentMemory.attrMemoryId,
         LOG_LEVEL: 'INFO',
         IMAGE_VERSION: new Date().toISOString(),
       },
@@ -261,10 +273,6 @@ async function sendResponse(event, status, data, reason) {
 
     // Store runtime info for frontend
     this.agentRuntimeArn = agentRuntime.attrAgentRuntimeArn;
-
-
-
-
 
     new cdk.CfnOutput(this, 'AgentRuntimeArn', {
       value: agentRuntime.attrAgentRuntimeArn,
@@ -284,6 +292,10 @@ async function sendResponse(event, status, data, reason) {
       exportName: 'AgentCoreRegion',
     });
 
-
+    new cdk.CfnOutput(this, 'AgentMemoryId', {
+      value: agentMemory.attrMemoryId,
+      description: 'AgentCore Memory ID for session management',
+      exportName: 'AgentCoreMemoryId',
+    });
   }
 }

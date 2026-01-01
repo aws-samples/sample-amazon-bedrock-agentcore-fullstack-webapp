@@ -141,6 +141,22 @@ export class AgentCoreInfraStack extends cdk.Stack {
       resources: ['*'],
     }));
 
+    // AgentCore Memory Access
+    agentRole.addToPolicy(new iam.PolicyStatement({
+      sid: 'AgentCoreMemoryAccess',
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'bedrock-agentcore:ListSessions',
+        'bedrock-agentcore:CreateEvent',
+        'bedrock-agentcore:GetEvent',
+        'bedrock-agentcore:ListEvents',
+        'bedrock-agentcore:DeleteEvent',
+      ],
+      resources: [
+        `arn:aws:bedrock-agentcore:${this.region}:${this.account}:memory/*`,
+      ],
+    }));
+
     // Create S3 bucket for CodeBuild source
     const sourceBucket = new s3.Bucket(this, 'SourceBucket', {
       bucketName: `bedrock-agentcore-sources-${this.account}-${this.region}`,
