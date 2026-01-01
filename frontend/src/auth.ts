@@ -20,6 +20,7 @@ const userPool = new CognitoUserPool({
 export interface AuthUser {
   username: string;
   email: string;
+  sub: string;
 }
 
 export const signUp = (email: string, password: string): Promise<void> => {
@@ -111,10 +112,12 @@ export const getCurrentUser = (): Promise<AuthUser | null> => {
         }
 
         const email = attributes?.find((attr) => attr.Name === 'email')?.Value || '';
+        const sub = attributes?.find((attr) => attr.Name === 'sub')?.Value || '';
 
         resolve({
           username: cognitoUser.getUsername(),
           email,
+          sub,
         });
       });
     });
