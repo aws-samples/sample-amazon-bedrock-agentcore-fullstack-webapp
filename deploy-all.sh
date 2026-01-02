@@ -140,8 +140,7 @@ fi
 echo -e "\n\033[0;33m[7/10] Bootstrapping CDK environment...\033[0m"
 echo -e "\033[0;90m      (Setting up CDK deployment resources in your AWS account/region)\033[0m"
 pushd cdk > /dev/null
-TIMESTAMP=$(date +%Y%m%d%H%M%S)
-npx cdk bootstrap --output "cdk.out.$TIMESTAMP" --no-cli-pager
+npx cdk bootstrap
 popd > /dev/null
 
 # Step 8: Deploy infrastructure stack
@@ -149,7 +148,7 @@ echo -e "\n\033[0;33m[8/10] Deploying infrastructure stack...\033[0m"
 echo -e "\033[0;90m      (Creating S3 code bucket and IAM roles for direct code deployment)\033[0m"
 pushd cdk > /dev/null
 TIMESTAMP=$(date +%Y%m%d%H%M%S)
-npx cdk deploy AgentCoreInfra --output "cdk.out.$TIMESTAMP" --no-cli-pager --require-approval never
+npx cdk deploy AgentCoreInfra --output "cdk.out.$TIMESTAMP" --exclusively --require-approval never
 popd > /dev/null
 
 # Get the S3 bucket name from stack outputs
@@ -158,7 +157,6 @@ if [ -z "$CODE_BUCKET_NAME" ]; then
     echo -e "\033[0;31mFailed to get Code Bucket Name from stack outputs\033[0m"
     exit 1
 fi
-echo -e "\033[0;32m      Code Bucket: $CODE_BUCKET_NAME\033[0m"
 
 # Build agent deployment package
 echo -e "\nBuilding agent deployment package..."
@@ -200,7 +198,7 @@ echo -e "\n\033[0;33m[9/10] Deploying authentication stack...\033[0m"
 echo -e "\033[0;90m      (Creating Cognito User Pool with email verification and password policies)\033[0m"
 pushd cdk > /dev/null
 TIMESTAMP=$(date +%Y%m%d%H%M%S)
-npx cdk deploy AgentCoreAuth --output "cdk.out.$TIMESTAMP" --no-cli-pager --require-approval never
+npx cdk deploy AgentCoreAuth --output "cdk.out.$TIMESTAMP" --exclusively --require-approval never
 popd > /dev/null
 
 # Step 10: Deploy backend stack
@@ -208,7 +206,7 @@ echo -e "\n\033[0;33m[10/10] Deploying AgentCore backend stack...\033[0m"
 echo -e "\033[0;90m      (Creating AgentCore Runtime with direct code deployment and built-in Cognito auth)\033[0m"
 pushd cdk > /dev/null
 TIMESTAMP=$(date +%Y%m%d%H%M%S)
-if ! npx cdk deploy AgentCoreRuntime --output "cdk.out.$TIMESTAMP" --no-cli-pager --require-approval never 2>&1 | tee /tmp/agentcore-deploy.log; then
+if ! npx cdk deploy AgentCoreRuntime --output "cdk.out.$TIMESTAMP" --exclusively --require-approval never 2>&1 | tee /tmp/agentcore-deploy.log; then
     # Check if the error is about unrecognized resource type
     if grep -q "Unrecognized resource types.*BedrockAgentCore" /tmp/agentcore-deploy.log; then
         CURRENT_REGION="${AWS_DEFAULT_REGION:-${AWS_REGION:-unknown}}"
@@ -278,7 +276,7 @@ echo -e "\033[0;32mIdentity Pool ID: $IDENTITY_POOL_ID\033[0m"
 # Deploy frontend stack
 pushd cdk > /dev/null
 TIMESTAMP=$(date +%Y%m%d%H%M%S)
-npx cdk deploy AgentCoreFrontend --output "cdk.out.$TIMESTAMP" --no-cli-pager --require-approval never
+npx cdk deploy AgentCoreFrontend --output "cdk.out.$TIMESTAMP" --exclusively --require-approval never
 popd > /dev/null
 
 # Get CloudFront URL

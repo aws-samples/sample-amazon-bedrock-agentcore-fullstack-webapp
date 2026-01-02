@@ -139,8 +139,7 @@ if (-not (Test-Path "frontend/dist")) {
 Write-Host "`n[7/10] Bootstrapping CDK environment..." -ForegroundColor Yellow
 Write-Host "      (Setting up CDK deployment resources in your AWS account/region)" -ForegroundColor Gray
 Push-Location cdk
-$timestamp = Get-Date -Format "yyyyMMddHHmmss"
-npx cdk bootstrap --output "cdk.out.$timestamp" --no-cli-pager
+npx cdk bootstrap
 Pop-Location
 
 if ($LASTEXITCODE -ne 0) {
@@ -153,7 +152,7 @@ Write-Host "`n[8/10] Deploying infrastructure stack..." -ForegroundColor Yellow
 Write-Host "      (Creating S3 code bucket and IAM roles for direct code deployment)" -ForegroundColor Gray
 Push-Location cdk
 $timestamp = Get-Date -Format "yyyyMMddHHmmss"
-npx cdk deploy AgentCoreInfra --output "cdk.out.$timestamp" --no-cli-pager --require-approval never
+npx cdk deploy AgentCoreInfra --output "cdk.out.$timestamp" --exclusively --require-approval never
 Pop-Location
 
 if ($LASTEXITCODE -ne 0) {
@@ -167,7 +166,6 @@ if ([string]::IsNullOrEmpty($codeBucketName)) {
     Write-Host "Failed to get Code Bucket Name from stack outputs" -ForegroundColor Red
     exit 1
 }
-Write-Host "      Code Bucket: $codeBucketName" -ForegroundColor Green
 
 # Build agent deployment package (no step number - part of infrastructure setup)
 Write-Host "`nBuilding agent deployment package..." -ForegroundColor Yellow
@@ -223,7 +221,7 @@ Write-Host "`n[9/10] Deploying authentication stack..." -ForegroundColor Yellow
 Write-Host "      (Creating Cognito User Pool with email verification and password policies)" -ForegroundColor Gray
 Push-Location cdk
 $timestamp = Get-Date -Format "yyyyMMddHHmmss"
-npx cdk deploy AgentCoreAuth --output "cdk.out.$timestamp" --no-cli-pager --require-approval never
+npx cdk deploy AgentCoreAuth --output "cdk.out.$timestamp" --exclusively --require-approval never
 Pop-Location
 
 if ($LASTEXITCODE -ne 0) {
@@ -236,7 +234,7 @@ Write-Host "`n[10/10] Deploying AgentCore backend stack..." -ForegroundColor Yel
 Write-Host "      (Creating AgentCore Runtime with direct code deployment and built-in Cognito auth)" -ForegroundColor Gray
 Push-Location cdk
 $timestamp = Get-Date -Format "yyyyMMddHHmmss"
-$deployOutput = npx cdk deploy AgentCoreRuntime --output "cdk.out.$timestamp" --no-cli-pager --require-approval never 2>&1 | Tee-Object -Variable cdkOutput
+$deployOutput = npx cdk deploy AgentCoreRuntime --output "cdk.out.$timestamp" --exclusively --require-approval never 2>&1 | Tee-Object -Variable cdkOutput
 Pop-Location
 
 if ($LASTEXITCODE -ne 0) {
@@ -312,7 +310,7 @@ if ($LASTEXITCODE -ne 0) {
 # Deploy frontend stack
 Push-Location cdk
 $timestamp = Get-Date -Format "yyyyMMddHHmmss"
-npx cdk deploy AgentCoreFrontend --output "cdk.out.$timestamp" --no-cli-pager --require-approval never
+npx cdk deploy AgentCoreFrontend --output "cdk.out.$timestamp" --exclusively --require-approval never
 Pop-Location
 
 if ($LASTEXITCODE -ne 0) {
