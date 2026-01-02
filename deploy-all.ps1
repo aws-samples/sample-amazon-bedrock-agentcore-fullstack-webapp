@@ -2,6 +2,21 @@
 
 Write-Host "=== AgentCore Demo Deployment ===" -ForegroundColor Cyan
 
+# Verify required commands (no step number)
+$missingCommands = @()
+if (-not (Get-Command pip3 -ErrorAction SilentlyContinue)) {
+    $missingCommands += "pip3"
+}
+if (-not (Get-Command aws -ErrorAction SilentlyContinue)) {
+    $missingCommands += "aws"
+}
+
+if ($missingCommands.Count -gt 0) {
+    Write-Host "      ❌ Missing required commands: $($missingCommands -join ', ')" -ForegroundColor Red
+    Write-Host "      Please install the missing commands and try again." -ForegroundColor Yellow
+    exit 1
+}
+
 # Step 1: Verify AWS credentials
 Write-Host "`n[1/10] Verifying AWS credentials..." -ForegroundColor Yellow
 Write-Host "      (Checking AWS CLI configuration and validating access)" -ForegroundColor Gray
@@ -34,12 +49,12 @@ if ($versionMatch) {
     $minor = [int]$Matches[2]
     $patch = [int]$Matches[3]
     Write-Host "      Current version: aws-cli/$major.$minor.$patch" -ForegroundColor Gray
-    
+
     # Check if version is >= 2.31.13
-    $isVersionValid = ($major -gt 2) -or 
-                      ($major -eq 2 -and $minor -gt 31) -or 
+    $isVersionValid = ($major -gt 2) -or
+                      ($major -eq 2 -and $minor -gt 31) -or
                       ($major -eq 2 -and $minor -eq 31 -and $patch -ge 13)
-    
+
     if (-not $isVersionValid) {
         Write-Host "      ❌ AWS CLI version 2.31.13 or later is required" -ForegroundColor Red
         Write-Host ""
@@ -71,7 +86,7 @@ if ([string]::IsNullOrEmpty($currentRegion)) {
 }
 Write-Host "      Target region: $currentRegion" -ForegroundColor Gray
 
-# Try to list AgentCore runtimes to verify service availability
+# Try to list AgentCore Runtime to verify service availability
 $agentCoreCheck = aws bedrock-agentcore-control list-agent-runtimes --region $currentRegion --max-results 1 2>&1
 if ($LASTEXITCODE -ne 0) {
     $errorMessage = $agentCoreCheck | Out-String
@@ -135,7 +150,7 @@ if ($LASTEXITCODE -ne 0) {
 
 # Step 8: Deploy infrastructure stack
 Write-Host "`n[8/10] Deploying infrastructure stack..." -ForegroundColor Yellow
-Write-Host "      (Creating ECR repository, CodeBuild project, S3 bucket, and IAM roles)" -ForegroundColor Gray
+Write-Host "      (Creating S3 code bucket and IAM roles for direct code deployment)" -ForegroundColor Gray
 Push-Location cdk
 $timestamp = Get-Date -Format "yyyyMMddHHmmss"
 npx cdk deploy AgentCoreInfra --output "cdk.out.$timestamp" --no-cli-pager --require-approval never
@@ -143,6 +158,63 @@ Pop-Location
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Infrastructure deployment failed" -ForegroundColor Red
+    exit 1
+}
+
+# Get the S3 bucket name from stack outputs
+$codeBucketName = aws cloudformation describe-stacks --stack-name AgentCoreInfra --query "Stacks[0].Outputs[?OutputKey=='CodeBucketName'].OutputValue" --output text --no-cli-pager
+if ([string]::IsNullOrEmpty($codeBucketName)) {
+    Write-Host "Failed to get Code Bucket Name from stack outputs" -ForegroundColor Red
+    exit 1
+}
+Write-Host "      Code Bucket: $codeBucketName" -ForegroundColor Green
+
+# Build agent deployment package (no step number - part of infrastructure setup)
+Write-Host "`nBuilding agent deployment package..." -ForegroundColor Yellow
+Write-Host "      (Downloading ARM64 packages and creating ZIP for direct code deployment)" -ForegroundColor Gray
+
+# Create build directory
+$timestamp = Get-Date -Format "yyyyMMddHHmmss"
+$buildDir = "cdk\agentcore.out.$timestamp"
+New-Item -ItemType Directory -Path "$buildDir\packages" -Force | Out-Null
+New-Item -ItemType Directory -Path "$buildDir\deployment" -Force | Out-Null
+
+# Download ARM64-compatible packages
+pip3 download `
+    --platform manylinux2014_aarch64 `
+    --python-version 313 `
+    --only-binary=:all: `
+    --dest "$buildDir\packages" `
+    -r agent\requirements.txt 2>&1 | Out-Null
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Failed to download ARM64 packages" -ForegroundColor Red
+    exit 1
+}
+
+# Extract wheel packages to deployment directory
+$wheelFiles = Get-ChildItem "$buildDir\packages\*.whl"
+foreach ($whl in $wheelFiles) {
+    Expand-Archive -Path $whl.FullName -DestinationPath "$buildDir\deployment" -Force
+}
+
+# Copy agent source code
+Copy-Item "agent\strands_agent.py" -Destination "$buildDir\deployment\"
+
+# Create ZIP with maximum compression
+$zipPath = "$buildDir\deployment_package.zip"
+Compress-Archive -Path "$buildDir\deployment\*" -DestinationPath $zipPath -CompressionLevel Optimal -Force
+
+if (-not (Test-Path $zipPath)) {
+    Write-Host "Failed to create deployment package" -ForegroundColor Red
+    exit 1
+}
+
+# Upload to S3
+aws s3 cp $zipPath "s3://$codeBucketName/strands_agent/deployment_package.zip" --no-cli-pager
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Failed to upload to S3" -ForegroundColor Red
     exit 1
 }
 
@@ -159,11 +231,9 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Step 10: Deploy backend stack (triggers build and waits via Lambda)
+# Step 10: Deploy backend stack
 Write-Host "`n[10/10] Deploying AgentCore backend stack..." -ForegroundColor Yellow
-Write-Host "      (Uploading agent code, building ARM64 Docker image, creating AgentCore runtime with built-in Cognito auth)" -ForegroundColor Gray
-Write-Host "      Note: CodeBuild will compile the container image - this takes 5-10 minutes" -ForegroundColor DarkGray
-Write-Host "      The deployment will pause while waiting for the build to complete..." -ForegroundColor DarkGray
+Write-Host "      (Creating AgentCore Runtime with direct code deployment and built-in Cognito auth)" -ForegroundColor Gray
 Push-Location cdk
 $timestamp = Get-Date -Format "yyyyMMddHHmmss"
 $deployOutput = npx cdk deploy AgentCoreRuntime --output "cdk.out.$timestamp" --no-cli-pager --require-approval never 2>&1 | Tee-Object -Variable cdkOutput

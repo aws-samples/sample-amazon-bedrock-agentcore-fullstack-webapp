@@ -6,6 +6,27 @@ set -e  # Exit on error
 
 echo -e "\033[0;36m=== AgentCore Demo Deployment ===\033[0m"
 
+# Verify required commands
+MISSING_COMMANDS=()
+if ! command -v pip3 &> /dev/null; then
+    MISSING_COMMANDS+=("pip3")
+fi
+if ! command -v zip &> /dev/null; then
+    MISSING_COMMANDS+=("zip")
+fi
+if ! command -v unzip &> /dev/null; then
+    MISSING_COMMANDS+=("unzip")
+fi
+if ! command -v aws &> /dev/null; then
+    MISSING_COMMANDS+=("aws")
+fi
+
+if [ ${#MISSING_COMMANDS[@]} -ne 0 ]; then
+    echo -e "\033[0;31m      ❌ Missing required commands: ${MISSING_COMMANDS[*]}\033[0m"
+    echo -e "\033[0;33m      Please install the missing commands and try again.\033[0m"
+    exit 1
+fi
+
 # Step 1: Verify AWS credentials
 echo -e "\n\033[0;33m[1/10] Verifying AWS credentials...\033[0m"
 echo -e "\033[0;90m      (Checking AWS CLI configuration and validating access)\033[0m"
@@ -35,7 +56,7 @@ if [[ $AWS_VERSION =~ aws-cli/([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
     MINOR=${BASH_REMATCH[2]}
     PATCH=${BASH_REMATCH[3]}
     echo -e "\033[0;90m      Current version: aws-cli/$MAJOR.$MINOR.$PATCH\033[0m"
-    
+
     # Check if version is >= 2.31.13
     if [ "$MAJOR" -gt 2 ] || \
        [ "$MAJOR" -eq 2 -a "$MINOR" -gt 31 ] || \
@@ -71,7 +92,7 @@ if [ -z "$CURRENT_REGION" ]; then
 fi
 echo -e "\033[0;90m      Target region: $CURRENT_REGION\033[0m"
 
-# Try to list AgentCore runtimes to verify service availability
+# Try to list AgentCore Runtime to verify service availability
 if ! aws bedrock-agentcore-control list-agent-runtimes --region "$CURRENT_REGION" --max-results 1 > /dev/null 2>&1; then
     echo -e "\033[0;31m      ❌ AgentCore is not available in region: $CURRENT_REGION\033[0m"
     echo -e ""
@@ -125,11 +146,54 @@ popd > /dev/null
 
 # Step 8: Deploy infrastructure stack
 echo -e "\n\033[0;33m[8/10] Deploying infrastructure stack...\033[0m"
-echo -e "\033[0;90m      (Creating ECR repository, CodeBuild project, S3 bucket, and IAM roles)\033[0m"
+echo -e "\033[0;90m      (Creating S3 code bucket and IAM roles for direct code deployment)\033[0m"
 pushd cdk > /dev/null
 TIMESTAMP=$(date +%Y%m%d%H%M%S)
 npx cdk deploy AgentCoreInfra --output "cdk.out.$TIMESTAMP" --no-cli-pager --require-approval never
 popd > /dev/null
+
+# Get the S3 bucket name from stack outputs
+CODE_BUCKET_NAME=$(aws cloudformation describe-stacks --stack-name AgentCoreInfra --query "Stacks[0].Outputs[?OutputKey=='CodeBucketName'].OutputValue" --output text --no-cli-pager)
+if [ -z "$CODE_BUCKET_NAME" ]; then
+    echo -e "\033[0;31mFailed to get Code Bucket Name from stack outputs\033[0m"
+    exit 1
+fi
+echo -e "\033[0;32m      Code Bucket: $CODE_BUCKET_NAME\033[0m"
+
+# Build agent deployment package
+echo -e "\nBuilding agent deployment package..."
+echo -e "\033[0;90m      (Downloading ARM64 packages and creating ZIP for direct code deployment)\033[0m"
+
+# Create build directory
+TIMESTAMP=$(date +%Y%m%d%H%M%S)
+BUILD_DIR="cdk/agentcore.out.$TIMESTAMP"
+mkdir -p "$BUILD_DIR/packages" "$BUILD_DIR/deployment"
+
+# Download ARM64-compatible packages
+pip3 download \
+    --platform manylinux2014_aarch64 \
+    --python-version 313 \
+    --only-binary=:all: \
+    --dest "$BUILD_DIR/packages" \
+    -r agent/requirements.txt > /dev/null 2>&1
+
+# Extract wheel packages to deployment directory
+for whl in "$BUILD_DIR/packages/"*.whl; do
+    unzip -q -o "$whl" -d "$BUILD_DIR/deployment"
+done
+
+# Copy agent source code
+cp agent/strands_agent.py "$BUILD_DIR/deployment/"
+
+# Create ZIP with maximum compression
+pushd "$BUILD_DIR/deployment" > /dev/null
+zip -9 -r ../deployment_package.zip . > /dev/null
+popd > /dev/null
+
+# Upload to S3
+aws s3 cp "$BUILD_DIR/deployment_package.zip" \
+    "s3://$CODE_BUCKET_NAME/strands_agent/deployment_package.zip" \
+    --no-cli-pager
 
 # Step 9: Deploy auth stack
 echo -e "\n\033[0;33m[9/10] Deploying authentication stack...\033[0m"
@@ -139,11 +203,9 @@ TIMESTAMP=$(date +%Y%m%d%H%M%S)
 npx cdk deploy AgentCoreAuth --output "cdk.out.$TIMESTAMP" --no-cli-pager --require-approval never
 popd > /dev/null
 
-# Step 10: Deploy backend stack (triggers build and waits via Lambda)
+# Step 10: Deploy backend stack
 echo -e "\n\033[0;33m[10/10] Deploying AgentCore backend stack...\033[0m"
-echo -e "\033[0;90m      (Uploading agent code, building ARM64 Docker image, creating AgentCore runtime with built-in Cognito auth)\033[0m"
-echo -e "\033[0;90m      Note: CodeBuild will compile the container image - this takes 5-10 minutes\033[0m"
-echo -e "\033[0;90m      The deployment will pause while waiting for the build to complete...\033[0m"
+echo -e "\033[0;90m      (Creating AgentCore Runtime with direct code deployment and built-in Cognito auth)\033[0m"
 pushd cdk > /dev/null
 TIMESTAMP=$(date +%Y%m%d%H%M%S)
 if ! npx cdk deploy AgentCoreRuntime --output "cdk.out.$TIMESTAMP" --no-cli-pager --require-approval never 2>&1 | tee /tmp/agentcore-deploy.log; then
