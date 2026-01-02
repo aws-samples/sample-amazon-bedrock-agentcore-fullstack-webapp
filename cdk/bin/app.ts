@@ -8,13 +8,13 @@ import { AuthStack } from '../lib/auth-stack';
 
 const app = new cdk.App();
 
-// Infrastructure stack (ECR, IAM, CodeBuild, S3)
+// Infrastructure stack (S3 bucket, IAM role)
 new AgentCoreInfraStack(app, 'AgentCoreInfra', {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION || 'us-east-1',
   },
-  description: 'AgentCore Infrastructure: Container registry, build pipeline, and IAM roles (uksb-q3p3ydk6f3)',
+  description: 'AgentCore Infrastructure: S3 code bucket and IAM role for direct code deployment (uksb-q3p3ydk6f3)',
 });
 
 // Auth stack (Cognito User Pool)
