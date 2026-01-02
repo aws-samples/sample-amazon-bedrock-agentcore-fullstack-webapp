@@ -161,7 +161,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # Get the S3 bucket name from stack outputs
-$codeBucketName = aws cloudformation describe-stacks --stack-name AgentCoreInfra --query "Stacks[0].Outputs[?OutputKey=='CodeBucketName'].OutputValue" --output text --no-cli-pager
+$codeBucketName = aws cloudformation describe-stacks --stack-name AgentCoreInfra --query "Stacks[0].Outputs[?OutputKey=='SourceBucketName'].OutputValue" --output text --no-cli-pager
 if ([string]::IsNullOrEmpty($codeBucketName)) {
     Write-Host "Failed to get Code Bucket Name from stack outputs" -ForegroundColor Red
     exit 1
@@ -173,7 +173,7 @@ Write-Host "      (Downloading ARM64 packages and creating ZIP for direct code d
 
 # Create build directory
 $timestamp = Get-Date -Format "yyyyMMddHHmmss"
-$buildDir = "cdk\agentcore.out.$timestamp"
+$buildDir = "cdk\cdk.agentcore.out.$timestamp"
 New-Item -ItemType Directory -Path "$buildDir\packages" -Force | Out-Null
 New-Item -ItemType Directory -Path "$buildDir\deployment" -Force | Out-Null
 
@@ -193,11 +193,14 @@ if ($LASTEXITCODE -ne 0) {
 # Extract wheel packages to deployment directory
 $wheelFiles = Get-ChildItem "$buildDir\packages\*.whl"
 foreach ($whl in $wheelFiles) {
-    Expand-Archive -Path $whl.FullName -DestinationPath "$buildDir\deployment" -Force
+    $tempZip = [System.IO.Path]::ChangeExtension($whl.FullName, ".zip")
+    Copy-Item -Path $whl.FullName -Destination $tempZip
+    Expand-Archive -Path $tempZip -DestinationPath "$buildDir\deployment" -Force
+    Remove-Item -Path $tempZip
 }
 
 # Copy agent source code
-Copy-Item "agent\strands_agent.py" -Destination "$buildDir\deployment\"
+Copy-Item -Path "agent\*" -Destination "$buildDir\deployment\" -Exclude "requirements.txt" -Recurse
 
 # Create ZIP with maximum compression
 $zipPath = "$buildDir\deployment_package.zip"

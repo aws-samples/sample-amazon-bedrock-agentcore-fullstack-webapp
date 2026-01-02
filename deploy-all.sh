@@ -152,7 +152,7 @@ npx cdk deploy AgentCoreInfra --output "cdk.out.$TIMESTAMP" --exclusively --requ
 popd > /dev/null
 
 # Get the S3 bucket name from stack outputs
-CODE_BUCKET_NAME=$(aws cloudformation describe-stacks --stack-name AgentCoreInfra --query "Stacks[0].Outputs[?OutputKey=='CodeBucketName'].OutputValue" --output text --no-cli-pager)
+CODE_BUCKET_NAME=$(aws cloudformation describe-stacks --stack-name AgentCoreInfra --query "Stacks[0].Outputs[?OutputKey=='SourceBucketName'].OutputValue" --output text --no-cli-pager)
 if [ -z "$CODE_BUCKET_NAME" ]; then
     echo -e "\033[0;31mFailed to get Code Bucket Name from stack outputs\033[0m"
     exit 1
@@ -164,7 +164,7 @@ echo -e "\033[0;90m      (Downloading ARM64 packages and creating ZIP for direct
 
 # Create build directory
 TIMESTAMP=$(date +%Y%m%d%H%M%S)
-BUILD_DIR="cdk/agentcore.out.$TIMESTAMP"
+BUILD_DIR="cdk/cdk.agentcore.out.$TIMESTAMP"
 mkdir -p "$BUILD_DIR/packages" "$BUILD_DIR/deployment"
 
 # Download ARM64-compatible packages
@@ -181,7 +181,8 @@ for whl in "$BUILD_DIR/packages/"*.whl; do
 done
 
 # Copy agent source code
-cp agent/strands_agent.py "$BUILD_DIR/deployment/"
+cp -r agent/* "$BUILD_DIR/deployment/"
+rm -f "$BUILD_DIR/deployment/requirements.txt"
 
 # Create ZIP with maximum compression
 pushd "$BUILD_DIR/deployment" > /dev/null
