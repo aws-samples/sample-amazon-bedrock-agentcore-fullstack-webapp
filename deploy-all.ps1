@@ -2,6 +2,21 @@
 
 Write-Host "=== AgentCore Demo Deployment ===" -ForegroundColor Cyan
 
+# Verify required commands (no step number)
+$missingCommands = @()
+if (-not (Get-Command pip3 -ErrorAction SilentlyContinue)) {
+    $missingCommands += "pip3"
+}
+if (-not (Get-Command aws -ErrorAction SilentlyContinue)) {
+    $missingCommands += "aws"
+}
+
+if ($missingCommands.Count -gt 0) {
+    Write-Host "      ❌ Missing required commands: $($missingCommands -join ', ')" -ForegroundColor Red
+    Write-Host "      Please install the missing commands and try again." -ForegroundColor Yellow
+    exit 1
+}
+
 # Step 1: Verify AWS credentials
 Write-Host "`n[1/10] Verifying AWS credentials..." -ForegroundColor Yellow
 Write-Host "      (Checking AWS CLI configuration and validating access)" -ForegroundColor Gray
@@ -34,12 +49,12 @@ if ($versionMatch) {
     $minor = [int]$Matches[2]
     $patch = [int]$Matches[3]
     Write-Host "      Current version: aws-cli/$major.$minor.$patch" -ForegroundColor Gray
-    
+
     # Check if version is >= 2.31.13
-    $isVersionValid = ($major -gt 2) -or 
-                      ($major -eq 2 -and $minor -gt 31) -or 
+    $isVersionValid = ($major -gt 2) -or
+                      ($major -eq 2 -and $minor -gt 31) -or
                       ($major -eq 2 -and $minor -eq 31 -and $patch -ge 13)
-    
+
     if (-not $isVersionValid) {
         Write-Host "      ❌ AWS CLI version 2.31.13 or later is required" -ForegroundColor Red
         Write-Host ""
@@ -71,7 +86,7 @@ if ([string]::IsNullOrEmpty($currentRegion)) {
 }
 Write-Host "      Target region: $currentRegion" -ForegroundColor Gray
 
-# Try to list AgentCore runtimes to verify service availability
+# Try to list AgentCore Runtime to verify service availability
 $agentCoreCheck = aws bedrock-agentcore-control list-agent-runtimes --region $currentRegion --max-results 1 2>&1
 if ($LASTEXITCODE -ne 0) {
     $errorMessage = $agentCoreCheck | Out-String
@@ -124,8 +139,7 @@ if (-not (Test-Path "frontend/dist")) {
 Write-Host "`n[7/10] Bootstrapping CDK environment..." -ForegroundColor Yellow
 Write-Host "      (Setting up CDK deployment resources in your AWS account/region)" -ForegroundColor Gray
 Push-Location cdk
-$timestamp = Get-Date -Format "yyyyMMddHHmmss"
-npx cdk bootstrap --output "cdk.out.$timestamp" --no-cli-pager
+npx cdk bootstrap
 Pop-Location
 
 if ($LASTEXITCODE -ne 0) {
@@ -135,14 +149,73 @@ if ($LASTEXITCODE -ne 0) {
 
 # Step 8: Deploy infrastructure stack
 Write-Host "`n[8/10] Deploying infrastructure stack..." -ForegroundColor Yellow
-Write-Host "      (Creating ECR repository, CodeBuild project, S3 bucket, and IAM roles)" -ForegroundColor Gray
+Write-Host "      (Creating S3 code bucket and IAM roles for direct code deployment)" -ForegroundColor Gray
 Push-Location cdk
 $timestamp = Get-Date -Format "yyyyMMddHHmmss"
-npx cdk deploy AgentCoreInfra --output "cdk.out.$timestamp" --no-cli-pager --require-approval never
+npx cdk deploy AgentCoreInfra --output "cdk.out.$timestamp" --exclusively --require-approval never
 Pop-Location
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Infrastructure deployment failed" -ForegroundColor Red
+    exit 1
+}
+
+# Get the S3 bucket name from stack outputs
+$codeBucketName = aws cloudformation describe-stacks --stack-name AgentCoreInfra --query "Stacks[0].Outputs[?OutputKey=='SourceBucketName'].OutputValue" --output text --no-cli-pager
+if ([string]::IsNullOrEmpty($codeBucketName)) {
+    Write-Host "Failed to get Code Bucket Name from stack outputs" -ForegroundColor Red
+    exit 1
+}
+
+# Build agent deployment package (no step number - part of infrastructure setup)
+Write-Host "`nBuilding agent deployment package..." -ForegroundColor Yellow
+Write-Host "      (Downloading ARM64 packages and creating ZIP for direct code deployment)" -ForegroundColor Gray
+
+# Create build directory
+$timestamp = Get-Date -Format "yyyyMMddHHmmss"
+$buildDir = "cdk\cdk.agentcore.out.$timestamp"
+New-Item -ItemType Directory -Path "$buildDir\packages" -Force | Out-Null
+New-Item -ItemType Directory -Path "$buildDir\deployment" -Force | Out-Null
+
+# Download ARM64-compatible packages
+pip3 download `
+    --platform manylinux2014_aarch64 `
+    --python-version 313 `
+    --only-binary=:all: `
+    --dest "$buildDir\packages" `
+    -r agent\requirements.txt 2>&1 | Out-Null
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Failed to download ARM64 packages" -ForegroundColor Red
+    exit 1
+}
+
+# Extract wheel packages to deployment directory
+$wheelFiles = Get-ChildItem "$buildDir\packages\*.whl"
+foreach ($whl in $wheelFiles) {
+    $tempZip = [System.IO.Path]::ChangeExtension($whl.FullName, ".zip")
+    Copy-Item -Path $whl.FullName -Destination $tempZip
+    Expand-Archive -Path $tempZip -DestinationPath "$buildDir\deployment" -Force
+    Remove-Item -Path $tempZip
+}
+
+# Copy agent source code
+Copy-Item -Path "agent\*" -Destination "$buildDir\deployment\" -Exclude "requirements.txt" -Recurse
+
+# Create ZIP with maximum compression
+$zipPath = "$buildDir\deployment_package.zip"
+Compress-Archive -Path "$buildDir\deployment\*" -DestinationPath $zipPath -CompressionLevel Optimal -Force
+
+if (-not (Test-Path $zipPath)) {
+    Write-Host "Failed to create deployment package" -ForegroundColor Red
+    exit 1
+}
+
+# Upload to S3
+aws s3 cp $zipPath "s3://$codeBucketName/strands_agent/deployment_package.zip" --no-cli-pager
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Failed to upload to S3" -ForegroundColor Red
     exit 1
 }
 
@@ -151,7 +224,7 @@ Write-Host "`n[9/10] Deploying authentication stack..." -ForegroundColor Yellow
 Write-Host "      (Creating Cognito User Pool with email verification and password policies)" -ForegroundColor Gray
 Push-Location cdk
 $timestamp = Get-Date -Format "yyyyMMddHHmmss"
-npx cdk deploy AgentCoreAuth --output "cdk.out.$timestamp" --no-cli-pager --require-approval never
+npx cdk deploy AgentCoreAuth --output "cdk.out.$timestamp" --exclusively --require-approval never
 Pop-Location
 
 if ($LASTEXITCODE -ne 0) {
@@ -159,14 +232,12 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Step 10: Deploy backend stack (triggers build and waits via Lambda)
+# Step 10: Deploy backend stack
 Write-Host "`n[10/10] Deploying AgentCore backend stack..." -ForegroundColor Yellow
-Write-Host "      (Uploading agent code, building ARM64 Docker image, creating AgentCore runtime with built-in Cognito auth)" -ForegroundColor Gray
-Write-Host "      Note: CodeBuild will compile the container image - this takes 5-10 minutes" -ForegroundColor DarkGray
-Write-Host "      The deployment will pause while waiting for the build to complete..." -ForegroundColor DarkGray
+Write-Host "      (Creating AgentCore Runtime with direct code deployment and built-in Cognito auth)" -ForegroundColor Gray
 Push-Location cdk
 $timestamp = Get-Date -Format "yyyyMMddHHmmss"
-$deployOutput = npx cdk deploy AgentCoreRuntime --output "cdk.out.$timestamp" --no-cli-pager --require-approval never 2>&1 | Tee-Object -Variable cdkOutput
+$deployOutput = npx cdk deploy AgentCoreRuntime --output "cdk.out.$timestamp" --exclusively --require-approval never 2>&1 | Tee-Object -Variable cdkOutput
 Pop-Location
 
 if ($LASTEXITCODE -ne 0) {
@@ -194,8 +265,10 @@ Write-Host "`nBuilding and deploying frontend..." -ForegroundColor Yellow
 Write-Host "      (Retrieving AgentCore Runtime ID and Cognito config, building React app, deploying to S3 + CloudFront)" -ForegroundColor Gray
 $agentRuntimeArn = aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='AgentRuntimeArn'].OutputValue" --output text --no-cli-pager
 $region = aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='Region'].OutputValue" --output text --no-cli-pager
+$memoryId = aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='AgentMemoryId'].OutputValue" --output text --no-cli-pager
 $userPoolId = aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text --no-cli-pager
 $userPoolClientId = aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolClientId'].OutputValue" --output text --no-cli-pager
+$identityPoolId = aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='IdentityPoolId'].OutputValue" --output text --no-cli-pager
 
 if ([string]::IsNullOrEmpty($agentRuntimeArn)) {
     Write-Host "Failed to get Agent Runtime ARN from stack outputs" -ForegroundColor Red
@@ -207,18 +280,30 @@ if ([string]::IsNullOrEmpty($region)) {
     exit 1
 }
 
+if ([string]::IsNullOrEmpty($memoryId)) {
+    Write-Host "Failed to get Memory ID from stack outputs" -ForegroundColor Red
+    exit 1
+}
+
 if ([string]::IsNullOrEmpty($userPoolId) -or [string]::IsNullOrEmpty($userPoolClientId)) {
     Write-Host "Failed to get Cognito config from stack outputs" -ForegroundColor Red
     exit 1
 }
 
+if ([string]::IsNullOrEmpty($identityPoolId)) {
+    Write-Host "Failed to get Identity Pool ID from stack outputs" -ForegroundColor Red
+    exit 1
+}
+
 Write-Host "Agent Runtime ARN: $agentRuntimeArn" -ForegroundColor Green
 Write-Host "Region: $region" -ForegroundColor Green
+Write-Host "Memory ID: $memoryId" -ForegroundColor Green
 Write-Host "User Pool ID: $userPoolId" -ForegroundColor Green
 Write-Host "User Pool Client ID: $userPoolClientId" -ForegroundColor Green
+Write-Host "Identity Pool ID: $identityPoolId" -ForegroundColor Green
 
 # Build frontend with AgentCore Runtime ARN and Cognito config
-& .\scripts\build-frontend.ps1 -UserPoolId $userPoolId -UserPoolClientId $userPoolClientId -AgentRuntimeArn $agentRuntimeArn -Region $region
+& .\scripts\build-frontend.ps1 -UserPoolId $userPoolId -UserPoolClientId $userPoolClientId -AgentRuntimeArn $agentRuntimeArn -IdentityPoolId $identityPoolId -MemoryId $memoryId -Region $region
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Frontend build failed" -ForegroundColor Red
@@ -228,7 +313,7 @@ if ($LASTEXITCODE -ne 0) {
 # Deploy frontend stack
 Push-Location cdk
 $timestamp = Get-Date -Format "yyyyMMddHHmmss"
-npx cdk deploy AgentCoreFrontend --output "cdk.out.$timestamp" --no-cli-pager --require-approval never
+npx cdk deploy AgentCoreFrontend --output "cdk.out.$timestamp" --exclusively --require-approval never
 Pop-Location
 
 if ($LASTEXITCODE -ne 0) {
@@ -243,7 +328,9 @@ Write-Host "`n=== Deployment Complete ===" -ForegroundColor Green
 Write-Host "Website URL: $websiteUrl" -ForegroundColor Cyan
 Write-Host "Agent Runtime ARN: $agentRuntimeArn" -ForegroundColor Cyan
 Write-Host "Region: $region" -ForegroundColor Cyan
+Write-Host "Memory ID: $memoryId" -ForegroundColor Cyan
 Write-Host "User Pool ID: $userPoolId" -ForegroundColor Cyan
 Write-Host "User Pool Client ID: $userPoolClientId" -ForegroundColor Cyan
+Write-Host "Identity Pool ID: $identityPoolId" -ForegroundColor Cyan
 Write-Host "`nNote: Users must sign up and log in to use the application" -ForegroundColor Yellow
 Write-Host "Frontend now calls AgentCore directly with JWT authentication" -ForegroundColor Green

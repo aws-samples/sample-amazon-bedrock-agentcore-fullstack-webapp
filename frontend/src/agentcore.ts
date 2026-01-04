@@ -1,6 +1,8 @@
 // Note: Using direct HTTP calls to AgentCore with JWT bearer tokens
 // as shown in AWS AgentCore documentation
 
+import { getAccessToken } from './auth';
+
 const region = (import.meta as any).env.VITE_REGION || 'us-east-1';
 const agentRuntimeArn = (import.meta as any).env.VITE_AGENT_RUNTIME_ARN;
 const isLocalDev = (import.meta as any).env.VITE_LOCAL_DEV === 'true';
@@ -8,6 +10,8 @@ const localAgentUrl = (import.meta as any).env.VITE_AGENT_RUNTIME_URL || '/api';
 
 export interface InvokeAgentRequest {
   prompt: string;
+  actorId: string;
+  sessionId: string;
   onChunk?: (chunk: string) => void;
 }
 
@@ -28,7 +32,9 @@ export const invokeAgent = async (request: InvokeAgentRequest): Promise<InvokeAg
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          prompt: request.prompt
+          prompt: request.prompt,
+          actorId: request.actorId,
+          sessionId: request.sessionId
         }),
       });
 
@@ -125,7 +131,6 @@ export const invokeAgent = async (request: InvokeAgentRequest): Promise<InvokeAg
     }
 
     // Get JWT access token from Cognito (required for AgentCore as per AWS documentation)
-    const { getAccessToken } = await import('./auth');
     const jwtToken = await getAccessToken();
     if (!jwtToken) {
       throw new Error('Not authenticated - no access token available');
@@ -145,11 +150,13 @@ export const invokeAgent = async (request: InvokeAgentRequest): Promise<InvokeAg
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${jwtToken}`,
-        'X-Amzn-Bedrock-AgentCore-Runtime-Session-Id': `testsession${Date.now()}${Math.random().toString(36).substring(2, 15)}`,
+        'X-Amzn-Bedrock-AgentCore-Runtime-Session-Id': request.sessionId || `testsession${Date.now()}${Math.random().toString(36).substring(2, 15)}`,
         'X-Amzn-Trace-Id': `trace-${Date.now()}`,
       },
       body: JSON.stringify({
-        prompt: request.prompt
+        prompt: request.prompt,
+        actorId: request.actorId,
+        sessionId: request.sessionId
       }),
     });
 

@@ -6,6 +6,27 @@ set -e  # Exit on error
 
 echo -e "\033[0;36m=== AgentCore Demo Deployment ===\033[0m"
 
+# Verify required commands
+MISSING_COMMANDS=()
+if ! command -v pip3 &> /dev/null; then
+    MISSING_COMMANDS+=("pip3")
+fi
+if ! command -v zip &> /dev/null; then
+    MISSING_COMMANDS+=("zip")
+fi
+if ! command -v unzip &> /dev/null; then
+    MISSING_COMMANDS+=("unzip")
+fi
+if ! command -v aws &> /dev/null; then
+    MISSING_COMMANDS+=("aws")
+fi
+
+if [ ${#MISSING_COMMANDS[@]} -ne 0 ]; then
+    echo -e "\033[0;31m      ❌ Missing required commands: ${MISSING_COMMANDS[*]}\033[0m"
+    echo -e "\033[0;33m      Please install the missing commands and try again.\033[0m"
+    exit 1
+fi
+
 # Step 1: Verify AWS credentials
 echo -e "\n\033[0;33m[1/10] Verifying AWS credentials...\033[0m"
 echo -e "\033[0;90m      (Checking AWS CLI configuration and validating access)\033[0m"
@@ -35,7 +56,7 @@ if [[ $AWS_VERSION =~ aws-cli/([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
     MINOR=${BASH_REMATCH[2]}
     PATCH=${BASH_REMATCH[3]}
     echo -e "\033[0;90m      Current version: aws-cli/$MAJOR.$MINOR.$PATCH\033[0m"
-    
+
     # Check if version is >= 2.31.13
     if [ "$MAJOR" -gt 2 ] || \
        [ "$MAJOR" -eq 2 -a "$MINOR" -gt 31 ] || \
@@ -71,7 +92,7 @@ if [ -z "$CURRENT_REGION" ]; then
 fi
 echo -e "\033[0;90m      Target region: $CURRENT_REGION\033[0m"
 
-# Try to list AgentCore runtimes to verify service availability
+# Try to list AgentCore Runtime to verify service availability
 if ! aws bedrock-agentcore-control list-agent-runtimes --region "$CURRENT_REGION" --max-results 1 > /dev/null 2>&1; then
     echo -e "\033[0;31m      ❌ AgentCore is not available in region: $CURRENT_REGION\033[0m"
     echo -e ""
@@ -119,34 +140,74 @@ fi
 echo -e "\n\033[0;33m[7/10] Bootstrapping CDK environment...\033[0m"
 echo -e "\033[0;90m      (Setting up CDK deployment resources in your AWS account/region)\033[0m"
 pushd cdk > /dev/null
-TIMESTAMP=$(date +%Y%m%d%H%M%S)
-npx cdk bootstrap --output "cdk.out.$TIMESTAMP" --no-cli-pager
+npx cdk bootstrap
 popd > /dev/null
 
 # Step 8: Deploy infrastructure stack
 echo -e "\n\033[0;33m[8/10] Deploying infrastructure stack...\033[0m"
-echo -e "\033[0;90m      (Creating ECR repository, CodeBuild project, S3 bucket, and IAM roles)\033[0m"
+echo -e "\033[0;90m      (Creating S3 code bucket and IAM roles for direct code deployment)\033[0m"
 pushd cdk > /dev/null
 TIMESTAMP=$(date +%Y%m%d%H%M%S)
-npx cdk deploy AgentCoreInfra --output "cdk.out.$TIMESTAMP" --no-cli-pager --require-approval never
+npx cdk deploy AgentCoreInfra --output "cdk.out.$TIMESTAMP" --exclusively --require-approval never
 popd > /dev/null
+
+# Get the S3 bucket name from stack outputs
+CODE_BUCKET_NAME=$(aws cloudformation describe-stacks --stack-name AgentCoreInfra --query "Stacks[0].Outputs[?OutputKey=='SourceBucketName'].OutputValue" --output text --no-cli-pager)
+if [ -z "$CODE_BUCKET_NAME" ]; then
+    echo -e "\033[0;31mFailed to get Code Bucket Name from stack outputs\033[0m"
+    exit 1
+fi
+
+# Build agent deployment package
+echo -e "\nBuilding agent deployment package..."
+echo -e "\033[0;90m      (Downloading ARM64 packages and creating ZIP for direct code deployment)\033[0m"
+
+# Create build directory
+TIMESTAMP=$(date +%Y%m%d%H%M%S)
+BUILD_DIR="cdk/cdk.agentcore.out.$TIMESTAMP"
+mkdir -p "$BUILD_DIR/packages" "$BUILD_DIR/deployment"
+
+# Download ARM64-compatible packages
+pip3 download \
+    --platform manylinux2014_aarch64 \
+    --python-version 313 \
+    --only-binary=:all: \
+    --dest "$BUILD_DIR/packages" \
+    -r agent/requirements.txt > /dev/null 2>&1
+
+# Extract wheel packages to deployment directory
+for whl in "$BUILD_DIR/packages/"*.whl; do
+    unzip -q -o "$whl" -d "$BUILD_DIR/deployment"
+done
+
+# Copy agent source code
+cp -r agent/* "$BUILD_DIR/deployment/"
+rm -f "$BUILD_DIR/deployment/requirements.txt"
+
+# Create ZIP with maximum compression
+pushd "$BUILD_DIR/deployment" > /dev/null
+zip -9 -r ../deployment_package.zip . > /dev/null
+popd > /dev/null
+
+# Upload to S3
+aws s3 cp "$BUILD_DIR/deployment_package.zip" \
+    "s3://$CODE_BUCKET_NAME/strands_agent/deployment_package.zip" \
+    --no-cli-pager
 
 # Step 9: Deploy auth stack
 echo -e "\n\033[0;33m[9/10] Deploying authentication stack...\033[0m"
 echo -e "\033[0;90m      (Creating Cognito User Pool with email verification and password policies)\033[0m"
 pushd cdk > /dev/null
 TIMESTAMP=$(date +%Y%m%d%H%M%S)
-npx cdk deploy AgentCoreAuth --output "cdk.out.$TIMESTAMP" --no-cli-pager --require-approval never
+npx cdk deploy AgentCoreAuth --output "cdk.out.$TIMESTAMP" --exclusively --require-approval never
 popd > /dev/null
 
-# Step 10: Deploy backend stack (triggers build and waits via Lambda)
+# Step 10: Deploy backend stack
 echo -e "\n\033[0;33m[10/10] Deploying AgentCore backend stack...\033[0m"
-echo -e "\033[0;90m      (Uploading agent code, building ARM64 Docker image, creating AgentCore runtime with built-in Cognito auth)\033[0m"
-echo -e "\033[0;90m      Note: CodeBuild will compile the container image - this takes 5-10 minutes\033[0m"
-echo -e "\033[0;90m      The deployment will pause while waiting for the build to complete...\033[0m"
+echo -e "\033[0;90m      (Creating AgentCore Runtime with direct code deployment and built-in Cognito auth)\033[0m"
 pushd cdk > /dev/null
 TIMESTAMP=$(date +%Y%m%d%H%M%S)
-if ! npx cdk deploy AgentCoreRuntime --output "cdk.out.$TIMESTAMP" --no-cli-pager --require-approval never 2>&1 | tee /tmp/agentcore-deploy.log; then
+if ! npx cdk deploy AgentCoreRuntime --output "cdk.out.$TIMESTAMP" --exclusively --require-approval never 2>&1 | tee /tmp/agentcore-deploy.log; then
     # Check if the error is about unrecognized resource type
     if grep -q "Unrecognized resource types.*BedrockAgentCore" /tmp/agentcore-deploy.log; then
         CURRENT_REGION="${AWS_DEFAULT_REGION:-${AWS_REGION:-unknown}}"
@@ -173,8 +234,10 @@ echo -e "\nBuilding and deploying frontend...\033[0m"
 echo -e "\033[0;90m      (Retrieving AgentCore Runtime ID and Cognito config, building React app, deploying to S3 + CloudFront)\033[0m"
 AGENT_RUNTIME_ARN=$(aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='AgentRuntimeArn'].OutputValue" --output text --no-cli-pager)
 REGION=$(aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='Region'].OutputValue" --output text --no-cli-pager)
+MEMORY_ID=$(aws cloudformation describe-stacks --stack-name AgentCoreRuntime --query "Stacks[0].Outputs[?OutputKey=='AgentMemoryId'].OutputValue" --output text --no-cli-pager)
 USER_POOL_ID=$(aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text --no-cli-pager)
 USER_POOL_CLIENT_ID=$(aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='UserPoolClientId'].OutputValue" --output text --no-cli-pager)
+IDENTITY_POOL_ID=$(aws cloudformation describe-stacks --stack-name AgentCoreAuth --query "Stacks[0].Outputs[?OutputKey=='IdentityPoolId'].OutputValue" --output text --no-cli-pager)
 
 if [ -z "$AGENT_RUNTIME_ARN" ]; then
     echo -e "\033[0;31mFailed to get Agent Runtime ARN from stack outputs\033[0m"
@@ -186,23 +249,35 @@ if [ -z "$REGION" ]; then
     exit 1
 fi
 
+if [ -z "$MEMORY_ID" ]; then
+    echo -e "\033[0;31mFailed to get Memory ID from stack outputs\033[0m"
+    exit 1
+fi
+
 if [ -z "$USER_POOL_ID" ] || [ -z "$USER_POOL_CLIENT_ID" ]; then
     echo -e "\033[0;31mFailed to get Cognito config from stack outputs\033[0m"
     exit 1
 fi
 
+if [ -z "$IDENTITY_POOL_ID" ]; then
+    echo -e "\033[0;31mFailed to get Identity Pool ID from stack outputs\033[0m"
+    exit 1
+fi
+
 echo -e "\033[0;32mAgent Runtime ARN: $AGENT_RUNTIME_ARN\033[0m"
 echo -e "\033[0;32mRegion: $REGION\033[0m"
+echo -e "\033[0;32mMemory ID: $MEMORY_ID\033[0m"
 echo -e "\033[0;32mUser Pool ID: $USER_POOL_ID\033[0m"
 echo -e "\033[0;32mUser Pool Client ID: $USER_POOL_CLIENT_ID\033[0m"
+echo -e "\033[0;32mIdentity Pool ID: $IDENTITY_POOL_ID\033[0m"
 
 # Build frontend with AgentCore Runtime ARN and Cognito config
-./scripts/build-frontend.sh "$USER_POOL_ID" "$USER_POOL_CLIENT_ID" "$AGENT_RUNTIME_ARN" "$REGION"
+./scripts/build-frontend.sh "$USER_POOL_ID" "$USER_POOL_CLIENT_ID" "$AGENT_RUNTIME_ARN" "$IDENTITY_POOL_ID" "$MEMORY_ID" "$REGION"
 
 # Deploy frontend stack
 pushd cdk > /dev/null
 TIMESTAMP=$(date +%Y%m%d%H%M%S)
-npx cdk deploy AgentCoreFrontend --output "cdk.out.$TIMESTAMP" --no-cli-pager --require-approval never
+npx cdk deploy AgentCoreFrontend --output "cdk.out.$TIMESTAMP" --exclusively --require-approval never
 popd > /dev/null
 
 # Get CloudFront URL
@@ -212,7 +287,9 @@ echo -e "\n\033[0;32m=== Deployment Complete ===\033[0m"
 echo -e "\033[0;36mWebsite URL: $WEBSITE_URL\033[0m"
 echo -e "\033[0;36mAgent Runtime ARN: $AGENT_RUNTIME_ARN\033[0m"
 echo -e "\033[0;36mRegion: $REGION\033[0m"
+echo -e "\033[0;36mMemory ID: $MEMORY_ID\033[0m"
 echo -e "\033[0;36mUser Pool ID: $USER_POOL_ID\033[0m"
 echo -e "\033[0;36mUser Pool Client ID: $USER_POOL_CLIENT_ID\033[0m"
+echo -e "\033[0;36mIdentity Pool ID: $IDENTITY_POOL_ID\033[0m"
 echo -e "\n\033[0;33mNote: Users must sign up and log in to use the application\033[0m"
 echo -e "\033[0;32mFrontend now calls AgentCore directly with JWT authentication\033[0m"

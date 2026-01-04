@@ -11,8 +11,11 @@ The example agent is built with the [Strands Agents framework](https://github.co
 Flow:
 1. Browser loads React app from CloudFront/S3
 2. User authenticates with Cognito, receives JWT token
-3. Browser calls AgentCore directly with JWT Bearer token
-4. AgentCore validates JWT and processes agent requests
+3. Browser calls AgentCore Runtime directly with JWT Bearer token
+4. AgentCore Runtime validates JWT and executes agent
+5. Agent processes requests and invokes Amazon Bedrock foundation model
+6. AgentCore Memory stores and retrieves conversation context
+7. Generative AI observability provides monitoring dashboards and insights
 
 ## Quick Start
 
