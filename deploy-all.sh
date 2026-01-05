@@ -7,7 +7,7 @@ set -e  # Exit on error
 echo -e "\033[0;36m=== AgentCore Demo Deployment ===\033[0m"
 
 # Step 1: Verify AWS credentials
-echo -e "\n\033[0;33m[1/10] Verifying AWS credentials...\033[0m"
+echo -e "\n\033[0;33m[1/11] Verifying AWS credentials...\033[0m"
 echo -e "\033[0;90m      (Checking AWS CLI configuration and validating access)\033[0m"
 
 # Check if AWS credentials are configured
@@ -28,7 +28,7 @@ echo -e "\033[0;32m      Authenticated as: $ARN\033[0m"
 echo -e "\033[0;32m      AWS Account: $ACCOUNT_ID\033[0m"
 
 # Step 2: Check AWS CLI version
-echo -e "\n\033[0;33m[2/10] Checking AWS CLI version...\033[0m"
+echo -e "\n\033[0;33m[2/11] Checking AWS CLI version...\033[0m"
 AWS_VERSION=$(aws --version 2>&1)
 if [[ $AWS_VERSION =~ aws-cli/([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
     MAJOR=${BASH_REMATCH[1]}
@@ -56,7 +56,7 @@ else
 fi
 
 # Step 3: Check AgentCore availability in current region
-echo -e "\n\033[0;33m[3/10] Checking AgentCore availability in current region...\033[0m"
+echo -e "\n\033[0;33m[3/11] Checking AgentCore availability in current region...\033[0m"
 # Detect current region from AWS CLI configuration
 CURRENT_REGION=$(aws configure get region)
 if [ -z "$CURRENT_REGION" ]; then
@@ -81,8 +81,26 @@ if ! aws bedrock-agentcore-control list-agent-runtimes --region "$CURRENT_REGION
 fi
 echo -e "\033[0;32m      ✓ AgentCore is available in $CURRENT_REGION\033[0m"
 
-# Step 4: Install CDK dependencies
-echo -e "\n\033[0;33m[4/10] Installing CDK dependencies...\033[0m"
+# Step 4: Update Dockerfile with current region
+echo -e "\n\033[0;33m[4/11] Updating Dockerfile with current region...\033[0m"
+echo -e "\033[0;90m      (Setting AWS_REGION and AWS_DEFAULT_REGION to $CURRENT_REGION in agent/Dockerfile)\033[0m"
+
+DOCKERFILE_PATH="agent/Dockerfile"
+if [ -f "$DOCKERFILE_PATH" ]; then
+    # Replace both AWS_REGION and AWS_DEFAULT_REGION with current region
+    sed -i.bak -E "s/AWS_REGION=[a-zA-Z0-9-]+/AWS_REGION=$CURRENT_REGION/g" "$DOCKERFILE_PATH"
+    sed -i.bak -E "s/AWS_DEFAULT_REGION=[a-zA-Z0-9-]+/AWS_DEFAULT_REGION=$CURRENT_REGION/g" "$DOCKERFILE_PATH"
+    
+    # Remove backup file
+    rm -f "$DOCKERFILE_PATH.bak"
+    
+    echo -e "\033[0;32m      ✓ Updated Dockerfile with region: $CURRENT_REGION\033[0m"
+else
+    echo -e "\033[0;33m      ⚠ Dockerfile not found at $DOCKERFILE_PATH, skipping region update...\033[0m"
+fi
+
+# Step 5: Install CDK dependencies
+echo -e "\n\033[0;33m[5/11] Installing CDK dependencies...\033[0m"
 echo -e "\033[0;90m      (Installing AWS CDK libraries and TypeScript packages for infrastructure code)\033[0m"
 if [ ! -d "cdk/node_modules" ]; then
     pushd cdk > /dev/null
@@ -92,8 +110,8 @@ else
     echo -e "\033[0;90m      CDK dependencies already installed, skipping...\033[0m"
 fi
 
-# Step 5: Install frontend dependencies
-echo -e "\n\033[0;33m[5/10] Installing frontend dependencies...\033[0m"
+# Step 6: Install frontend dependencies
+echo -e "\n\033[0;33m[6/11] Installing frontend dependencies...\033[0m"
 echo -e "\033[0;90m      (Installing React, Vite, Cognito SDK, and UI component libraries)\033[0m"
 pushd frontend > /dev/null
 # Commented out to save time during development - uncomment for clean builds
@@ -106,7 +124,7 @@ popd > /dev/null
 
 # Step 6: Create placeholder dist BEFORE any CDK commands
 # (CDK synthesizes all stacks even when deploying one, so frontend/dist must exist)
-echo -e "\n\033[0;33m[6/10] Creating placeholder frontend build...\033[0m"
+echo -e "\n\033[0;33m[7/11] Creating placeholder frontend build...\033[0m"
 echo -e "\033[0;90m      (Generating temporary HTML file - required for CDK synthesis)\033[0m"
 if [ ! -d "frontend/dist" ]; then
     mkdir -p frontend/dist
@@ -116,7 +134,7 @@ else
 fi
 
 # Step 7: Bootstrap CDK (if needed)
-echo -e "\n\033[0;33m[7/10] Bootstrapping CDK environment...\033[0m"
+echo -e "\n\033[0;33m[8/11] Bootstrapping CDK environment...\033[0m"
 echo -e "\033[0;90m      (Setting up CDK deployment resources in your AWS account/region)\033[0m"
 pushd cdk > /dev/null
 TIMESTAMP=$(date +%Y%m%d%H%M%S)
@@ -124,7 +142,7 @@ npx cdk bootstrap --output "cdk.out.$TIMESTAMP" --no-cli-pager
 popd > /dev/null
 
 # Step 8: Deploy infrastructure stack
-echo -e "\n\033[0;33m[8/10] Deploying infrastructure stack...\033[0m"
+echo -e "\n\033[0;33m[9/11] Deploying infrastructure stack...\033[0m"
 echo -e "\033[0;90m      (Creating ECR repository, CodeBuild project, S3 bucket, and IAM roles)\033[0m"
 pushd cdk > /dev/null
 TIMESTAMP=$(date +%Y%m%d%H%M%S)
@@ -132,7 +150,7 @@ npx cdk deploy AgentCoreInfra --output "cdk.out.$TIMESTAMP" --no-cli-pager --req
 popd > /dev/null
 
 # Step 9: Deploy auth stack
-echo -e "\n\033[0;33m[9/10] Deploying authentication stack...\033[0m"
+echo -e "\n\033[0;33m[10/11] Deploying authentication stack...\033[0m"
 echo -e "\033[0;90m      (Creating Cognito User Pool with email verification and password policies)\033[0m"
 pushd cdk > /dev/null
 TIMESTAMP=$(date +%Y%m%d%H%M%S)
@@ -140,7 +158,7 @@ npx cdk deploy AgentCoreAuth --output "cdk.out.$TIMESTAMP" --no-cli-pager --requ
 popd > /dev/null
 
 # Step 10: Deploy backend stack (triggers build and waits via Lambda)
-echo -e "\n\033[0;33m[10/10] Deploying AgentCore backend stack...\033[0m"
+echo -e "\n\033[0;33m[11/11] Deploying AgentCore backend stack...\033[0m"
 echo -e "\033[0;90m      (Uploading agent code, building ARM64 Docker image, creating AgentCore runtime with built-in Cognito auth)\033[0m"
 echo -e "\033[0;90m      Note: CodeBuild will compile the container image - this takes 5-10 minutes\033[0m"
 echo -e "\033[0;90m      The deployment will pause while waiting for the build to complete...\033[0m"
