@@ -13,7 +13,7 @@ import Avatar from '@cloudscape-design/chat-components/avatar';
 import SupportPromptGroup from '@cloudscape-design/chat-components/support-prompt-group';
 import PromptInput from '@cloudscape-design/components/prompt-input';
 import Alert from '@cloudscape-design/components/alert';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { invokeAgent } from './agentcore';
 import './markdown.css';
@@ -433,64 +433,66 @@ function App() {
                                     ariaLabel={`${message.type === 'user' ? 'User' : 'Generative AI assistant'} message`}
                                     avatar={message.type === 'user' ? <div /> : undefined}
                                   >
-                                    <ReactMarkdown
-                                      remarkPlugins={[remarkGfm]}
-                                      components={{
-                                        // Style code blocks
-                                        code: ({ className, children }: any) => {
-                                          const inline = !className;
-                                          return inline ? (
-                                            <code style={{
-                                              backgroundColor: '#f4f4f4',
-                                              padding: '2px 6px',
-                                              borderRadius: '3px',
-                                              fontFamily: 'monospace',
-                                              fontSize: '0.9em'
-                                            }}>
-                                              {children}
-                                            </code>
-                                          ) : (
-                                            <pre style={{
-                                              backgroundColor: '#f4f4f4',
-                                              padding: '12px',
-                                              borderRadius: '6px',
-                                              overflow: 'auto',
-                                              fontFamily: 'monospace',
-                                              fontSize: '0.9em'
-                                            }}>
-                                              <code className={className}>
+                                    <div style={{ wordBreak: 'break-word' }}>
+                                      <ReactMarkdown
+                                        remarkPlugins={[remarkGfm]}
+                                        components={{
+                                          // Style code blocks
+                                          code: ({ className, children }) => {
+                                            const inline = !className;
+                                            return inline ? (
+                                              <code style={{
+                                                backgroundColor: '#f4f4f4',
+                                                padding: '2px 6px',
+                                                borderRadius: '3px',
+                                                fontFamily: 'monospace',
+                                                fontSize: '0.9em'
+                                              }}>
                                                 {children}
                                               </code>
-                                            </pre>
-                                          );
-                                        },
-                                        // Style links
-                                        a: ({ children, href }: any) => (
-                                          <a href={href} style={{ color: '#0972d3' }} target="_blank" rel="noopener noreferrer">
-                                            {children}
-                                          </a>
-                                        ),
-                                        // Style lists
-                                        ul: ({ children }: any) => (
-                                          <ul style={{ marginLeft: '20px', marginTop: '8px', marginBottom: '8px' }}>
-                                            {children}
-                                          </ul>
-                                        ),
-                                        ol: ({ children }: any) => (
-                                          <ol style={{ marginLeft: '20px', marginTop: '8px', marginBottom: '8px' }}>
-                                            {children}
-                                          </ol>
-                                        ),
-                                        // Style paragraphs
-                                        p: ({ children }: any) => (
-                                          <p style={{ marginTop: '8px', marginBottom: '8px' }}>
-                                            {children}
-                                          </p>
-                                        ),
-                                      }}
-                                    >
-                                      {message.content}
-                                    </ReactMarkdown>
+                                            ) : (
+                                              <pre style={{
+                                                backgroundColor: '#f4f4f4',
+                                                padding: '12px',
+                                                borderRadius: '6px',
+                                                overflow: 'auto',
+                                                fontFamily: 'monospace',
+                                                fontSize: '0.9em'
+                                              }}>
+                                                <code className={className}>
+                                                  {children}
+                                                </code>
+                                              </pre>
+                                            );
+                                          },
+                                          // Style links
+                                          a: ({ children, href }) => (
+                                            <a href={href} style={{ color: '#0972d3' }} target="_blank" rel="noopener noreferrer">
+                                              {children}
+                                            </a>
+                                          ),
+                                          // Style lists
+                                          ul: ({ children }) => (
+                                            <ul style={{ marginLeft: '20px', marginTop: '8px', marginBottom: '8px' }}>
+                                              {children}
+                                            </ul>
+                                          ),
+                                          ol: ({ children }) => (
+                                            <ol style={{ marginLeft: '20px', marginTop: '8px', marginBottom: '8px' }}>
+                                              {children}
+                                            </ol>
+                                          ),
+                                          // Style paragraphs
+                                          p: ({ children }) => (
+                                            <p style={{ marginTop: '8px', marginBottom: '8px' }}>
+                                              {children}
+                                            </p>
+                                          ),
+                                        } as Components}
+                                      >
+                                        {message.content}
+                                      </ReactMarkdown>
+                                    </div>
                                   </ChatBubble>
 
                                   {isAgent && (
