@@ -28,7 +28,7 @@
     "@cloudscape-design/global-styles": "^1.0.46"
   },
   "dependencies": {
-    "aws-cdk-lib": "^2.241.0",
+    "aws-cdk-lib": "^2.248.0",
     "constructs": "^10.4.2"
   }
 }
