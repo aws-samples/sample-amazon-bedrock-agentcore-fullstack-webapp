@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { getCurrentUser, signOut } from './auth';
 import AppLayout from '@cloudscape-design/components/app-layout';
 import TopNavigation from '@cloudscape-design/components/top-navigation';
 import ContentLayout from '@cloudscape-design/components/content-layout';
@@ -16,18 +17,14 @@ import Alert from '@cloudscape-design/components/alert';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { invokeAgent } from './agentcore';
+import { useChatHistory } from './useChatHistory';
+import { Message } from './messageParser';
+import ChatHistorySidebar from './ChatHistorySidebar';
 import './markdown.css';
 
 interface AuthUser {
   email: string;
-}
-
-interface Message {
-  type: 'user' | 'agent';
-  content: string;
-  timestamp: Date;
-  feedback?: 'helpful' | 'not-helpful';
-  feedbackSubmitting?: boolean;
+  sub: string;
 }
 
 interface MessageFeedback {
@@ -52,17 +49,60 @@ function App() {
   const [messageFeedback, setMessageFeedback] = useState<MessageFeedback>({});
   const [showSupportPrompts, setShowSupportPrompts] = useState(true);
   const [AuthModalComponent, setAuthModalComponent] = useState<any>(null);
+  const [currentSessionId, setCurrentSessionId] = useState<string>('');
+  const [sidebarVisible, setSidebarVisible] = useState(true);
+  const [isNewSession, setIsNewSession] = useState(true);
+
+  // Get Memory ID and Actor ID
+  const memoryId = (import.meta as any).env.VITE_MEMORY_ID || '';
+  const actorId = useMemo(() => {
+    if (isLocalDev) return 'local_dev_user';
+    return user?.sub || '';  // Use Cognito sub (UUID) as actorId
+  }, [user, isLocalDev]);
+
+  // Chat history hook
+  const {
+    sessions,
+    loading: sessionsLoading,
+    error: sessionsError,
+    fetchSessions,
+    fetchSessionMessages,
+    createNewSession,
+    addLocalSession,
+    clearSessions
+  } = useChatHistory(memoryId, actorId);
 
   // Authentication effect
   useEffect(() => {
     if (isLocalDev) {
       // Skip authentication in local development mode
       setCheckingAuth(false);
-      setUser({ email: 'local-dev@example.com' } as AuthUser);
+      setUser({
+        email: 'local-dev@example.com',
+        sub: 'local_dev_user_12345'  // Use valid UUID-like format for local dev
+      } as AuthUser);
+      // Initialize with a new session for local dev
+      const newSessionId = createNewSession();
+      setCurrentSessionId(newSessionId);
     } else {
       checkAuth();
     }
-  }, [isLocalDev]);
+  }, [isLocalDev, createNewSession]);
+
+  // Fetch sessions when user is authenticated
+  useEffect(() => {
+    if (user && memoryId && actorId) {
+      fetchSessions();
+    }
+  }, [user, memoryId, actorId, fetchSessions]);
+
+  // Initialize session when user logs in
+  useEffect(() => {
+    if (user && !currentSessionId) {
+      const newSessionId = createNewSession();
+      setCurrentSessionId(newSessionId);
+    }
+  }, [user, currentSessionId, createNewSession]);
 
   // AuthModal loading effect
   useEffect(() => {
@@ -77,7 +117,6 @@ function App() {
     if (isLocalDev) return;
 
     try {
-      const { getCurrentUser } = await import('./auth');
       const currentUser = await getCurrentUser();
       setUser(currentUser);
     } catch (err) {
@@ -91,13 +130,20 @@ function App() {
     if (isLocalDev) return;
 
     try {
-      const { signOut } = await import('./auth');
       signOut();
     } catch (err) {
       console.error('Error signing out:', err);
     }
+
+    // Reset all state to initial state
     setUser(null);
     setMessages([]);
+    setCurrentSessionId('');
+    setError('');
+    setPrompt('');
+    setMessageFeedback({});
+    setShowSupportPrompts(true);
+    clearSessions();
   };
 
   const handleAuthSuccess = async () => {
@@ -165,6 +211,40 @@ function App() {
     setShowSupportPrompts(false);
   };
 
+  const handleNewChat = () => {
+    const newSessionId = createNewSession();
+    setCurrentSessionId(newSessionId);
+    setMessages([]);
+    setError('');
+    setPrompt('');
+    setIsNewSession(true);
+    setShowSupportPrompts(true);
+  };
+
+  const handleSessionSelect = async (sessionId: string) => {
+    setCurrentSessionId(sessionId);
+    setError('');
+    setPrompt('');
+    setIsNewSession(false);
+    setShowSupportPrompts(false);
+
+    // Restore past messages from AgentCore Memory
+    setLoading(true);
+    try {
+      const restoredMessages = await fetchSessionMessages(sessionId);
+      setMessages(restoredMessages);
+      if (restoredMessages.length > 0) {
+        setShowSupportPrompts(true);
+      }
+    } catch (err: any) {
+      console.error('Failed to restore messages:', err);
+      setMessages([]);
+      setError('Failed to load conversation history');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSendMessage = async () => {
     if (!isLocalDev && !user) {
       setShowAuthModal(true);
@@ -173,6 +253,11 @@ function App() {
 
     if (!prompt.trim()) {
       setError('Please enter a prompt');
+      return;
+    }
+
+    if (!currentSessionId) {
+      setError('Session not initialized');
       return;
     }
 
@@ -204,6 +289,8 @@ function App() {
 
       const data = await invokeAgent({
         prompt: currentPrompt,
+        actorId: actorId,
+        sessionId: currentSessionId,
         onChunk: (chunk: string) => {
           // Accumulate the streamed content
           streamedContent += chunk;
@@ -232,6 +319,12 @@ function App() {
         };
         return updated;
       });
+
+      // Add new session to sidebar on first message send
+      if (isNewSession) {
+        addLocalSession(currentSessionId);
+        setIsNewSession(false);
+      }
 
       // Show support prompts after agent responds
       setShowSupportPrompts(true);
@@ -383,7 +476,21 @@ function App() {
         }}
       />
       <AppLayout
-        navigationHide={true}
+        navigationHide={!user || isLocalDev}
+        navigation={user && !isLocalDev ? (
+          <ChatHistorySidebar
+            sessions={sessions}
+            sessionId={currentSessionId}
+            loading={sessionsLoading}
+            error={sessionsError}
+            onSessionSelect={handleSessionSelect}
+            onNewChat={handleNewChat}
+            onRefresh={fetchSessions}
+          />
+        ) : undefined}
+        navigationWidth={280}
+        navigationOpen={sidebarVisible}
+        onNavigationChange={({ detail }) => setSidebarVisible(detail.open)}
         toolsHide={true}
         disableContentPaddings
         contentType="default"
